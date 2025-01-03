@@ -49,7 +49,7 @@ class XToolSensor(Entity):
 def setup_platform(hass, config, add_entities, discovery_info=None):
     """Set up the XTool sensor platform."""
     ip_address = config.get('ip_address')
-    name = "XTool Status"
+    name = config.get('name')
     
     # Add the sensor to Home Assistant
     add_entities([XToolSensor(name, ip_address)])

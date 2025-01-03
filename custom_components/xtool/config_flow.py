@@ -18,8 +18,9 @@ class XToolConfigFlow(config_entries.ConfigFlow, domain="xtool"):
         if user_input is not None:
             # Validierung der IP-Adresse
             self._ip_address = user_input[CONF_NAME]
+            self.name = user_input[CONF_NAME]
             return self.async_create_entry(
-                title="XTool",
+                title=self.name,
                 data={"ip_address": self._ip_address},
             )
 
