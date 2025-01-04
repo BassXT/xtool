@@ -9,10 +9,10 @@ This is a custom integration for Home Assistant to interface with the XTool lase
 
 ## Installation
 
-### HCAS
+### HACS
 
-1. Add as this repo as a custom repo in HCAS
-1. Search for Xtool in HCAS and install
+1. Add as this repo as a custom repo in HACS
+1. Search for Xtool in HACS and install
 
 ## Manual Install
 
