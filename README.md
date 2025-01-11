@@ -73,3 +73,8 @@ actions:
         domain: switch
 mode: single
 ```
+## Support My Work
+If you enjoy my projects or find them useful, consider supporting me on [Ko-fi](https://ko-fi.com/bassxt)!
+
+[![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/bassxt)
+
