@@ -43,7 +43,7 @@ class XToolSensor(Entity):
                 self._attributes = {}  # Keine zusätzlichen Attribute wenn 'mode' existiert
             else:
                 status = data.get('STATUS')
-                self._state = self._map_mode(status)
+                self._state = self._map_status(status)
                 self._attributes = {
                     "cpu_temp": data.get("CPU_TEMP"),
                     "water_temp": data.get("WATER_TEMP"),
@@ -63,6 +63,21 @@ class XToolSensor(Entity):
         elif mode == "P_SLEEP":
             return "Sleep"
         elif mode == "P_IDLE":
+            return "Idle"
+        else:
+            return "Unknown"
+
+    def _map_status(self, status):
+        """Map API STATUS values to readable states."""
+        if status == "P_FINISH":
+            return "Done"
+        elif status == "P_WORKING":
+            return "Running"
+        elif status == "P_SLEEP":
+            return "Sleep"
+        elif status == "P_ONLINE_READY_WORK":
+            return "Ready"
+        elif status == "P_IDLE":
             return "Idle"
         else:
             return "Unknown"
