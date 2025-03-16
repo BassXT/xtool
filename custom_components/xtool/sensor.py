@@ -13,6 +13,7 @@ class XToolSensor(Entity):
         self._name = name
         self._ip_address = ip_address
         self._state = None
+        self._attributes = {}
 
     @property
     def name(self):
@@ -23,27 +24,48 @@ class XToolSensor(Entity):
     def state(self):
         """Return the state of the sensor."""
         return self._state
+    
+    @property
+    def extra_state_attributes(self):
+        """Return additional attributes only if STATUS is used."""
+        return self._attributes if self._attributes else None
 
     def update(self):
         """Fetch the latest data from the XTool."""
         try:
-            response = requests.get(f"http://{self._ip_address}:8080/status")
+            response = requests.get(f"http://{self._ip_address}:8080/status", timeout=5)
             data = response.json()
-            # Mapping der API-Modi auf den Status
+            
+            # Prüfen, ob 'mode' existiert, wenn nicht, 'STATUS' verwenden
             mode = data.get('mode')
-            if mode == "P_WORK_DONE":
-                self._state = "Done"
-            elif mode == "Work":
-                self._state = "Running"
-            elif mode == "P_SLEEP":
-                self._state = "Sleep"
-            elif mode == "P_IDLE":
-                self._state = "Idle"
+            if mode:
+                self._state = self._map_mode(mode)
+                self._attributes = {}  # Keine zusätzlichen Attribute wenn 'mode' existiert
             else:
-                self._state = "Unknown"
+                status = data.get('STATUS')
+                self._state = self._map_mode(status)
+                self._attributes = {
+                    "cpu_temp": data.get("CPU_TEMP"),
+                    "water_temp": data.get("WATER_TEMP"),
+                    "purifier": data.get("Purifier")
+                }
         except Exception as e:
             _LOGGER.error("Error fetching data from XTool: %s", e)
             self._state = "off"
+            self._attributes = {}
+    
+    def _map_mode(self, mode):
+        """Map API modes to readable states."""
+        if mode == "P_WORK_DONE":
+            return "Done"
+        elif mode == "Work":
+            return "Running"
+        elif mode == "P_SLEEP":
+            return "Sleep"
+        elif mode == "P_IDLE":
+            return "Idle"
+        else:
+            return "Unknown"
 
 # Setup function for the integration
 def setup_platform(hass, config, add_entities, discovery_info=None):
