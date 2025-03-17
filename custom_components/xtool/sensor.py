@@ -35,25 +35,35 @@ class XToolSensor(Entity):
         try:
             response = requests.get(f"http://{self._ip_address}:8080/status", timeout=5)
             data = response.json()
+
             
-            # Prüfen, ob 'mode' existiert, wenn nicht, 'STATUS' verwenden
-            mode = data.get('mode')
+            _LOGGER.debug("XTool API Response: %s", data)
+
+            
+            mode = str(data.get("mode", "")).strip().upper()
+            status = str(data.get("STATUS", "")).strip().upper()
+
             if mode:
+                _LOGGER.debug("Detected MODE value: %s", mode)
                 self._state = self._map_mode(mode)
-                self._attributes = {}  # Keine zusätzlichen Attribute wenn 'mode' existiert
-            else:
-                status = data.get('STATUS')
+                self._attributes = {}  
+            elif status:
+                _LOGGER.debug("Detected STATUS value: %s", status)
                 self._state = self._map_status(status)
                 self._attributes = {
                     "cpu_temp": data.get("CPU_TEMP"),
                     "water_temp": data.get("WATER_TEMP"),
                     "purifier": data.get("Purifier")
                 }
+            else:
+                _LOGGER.warning("Neither MODE nor STATUS found in API response!")
+                self._state = "Unknown"
+                self._attributes = {}
         except Exception as e:
             _LOGGER.error("Error fetching data from XTool: %s", e)
             self._state = "off"
             self._attributes = {}
-    
+
     def _map_mode(self, mode):
         """Map API modes to readable states."""
         if mode == "P_WORK_DONE":
@@ -69,24 +79,27 @@ class XToolSensor(Entity):
 
     def _map_status(self, status):
         """Map API STATUS values to readable states."""
-        if status == "P_FINISH":
-            return "Done"
-        elif status == "P_WORKING":
-            return "Running"
-        elif status == "P_SLEEP":
-            return "Sleep"
-        elif status == "P_ONLINE_READY_WORK":
-            return "Ready"
-        elif status == "P_IDLE":
-            return "Idle"
+        status_map = {
+            "P_FINISH": "Done",
+            "P_WORKING": "Running",
+            "P_SLEEP": "Sleep",
+            "P_ONLINE_READY_WORK": "Ready",
+            "P_IDLE": "Idle"
+        }
+        
+        # Debug-Log
+        if status in status_map:
+            _LOGGER.debug("Mapped STATUS: %s -> %s", status, status_map[status])
+            return status_map[status]
         else:
+            _LOGGER.warning("Unrecognized STATUS: %s", status)
             return "Unknown"
 
 # Setup function for the integration
 def setup_platform(hass, config, add_entities, discovery_info=None):
     """Set up the XTool sensor platform."""
-    ip_address = config.get('ip_address')
-    name = config.get('name')
+    ip_address = config.get("ip_address")
+    name = config.get("name")
     
     # Add the sensor to Home Assistant
     add_entities([XToolSensor(name, ip_address)])
