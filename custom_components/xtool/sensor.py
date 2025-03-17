@@ -24,7 +24,7 @@ class XToolSensor(Entity):
     def state(self):
         """Return the state of the sensor."""
         return self._state
-    
+
     @property
     def extra_state_attributes(self):
         """Return additional attributes only if STATUS is used."""
@@ -36,10 +36,8 @@ class XToolSensor(Entity):
             response = requests.get(f"http://{self._ip_address}:8080/status", timeout=5)
             data = response.json()
 
-            
             _LOGGER.debug("XTool API Response: %s", data)
 
-            
             mode = str(data.get("mode", "")).strip().upper()
             status = str(data.get("STATUS", "")).strip().upper()
 
@@ -66,16 +64,22 @@ class XToolSensor(Entity):
 
     def _map_mode(self, mode):
         """Map API modes to readable states."""
-        if mode == "P_WORK_DONE":
-            return "Done"
-        elif mode == "Work":
-            return "Running"
-        elif mode == "P_SLEEP":
-            return "Sleep"
-        elif mode == "P_IDLE":
-            return "Idle"
+        mode_map = {
+            "P_WORK_DONE": "Done",
+            "WORK": "Running",
+            "P_SLEEP": "Sleep",
+            "P_IDLE": "Idle"
+        }
+
+        mapped_mode = mode_map.get(mode, "Unknown")
+
+        # Debug-Log
+        if mapped_mode == "Unknown":
+            _LOGGER.warning("Unrecognized MODE: %s", mode)
         else:
-            return "Unknown"
+            _LOGGER.debug("Mapped MODE: %s -> %s", mode, mapped_mode)
+
+        return mapped_mode
 
     def _map_status(self, status):
         """Map API STATUS values to readable states."""
@@ -86,14 +90,16 @@ class XToolSensor(Entity):
             "P_ONLINE_READY_WORK": "Ready",
             "P_IDLE": "Idle"
         }
-        
+
+        mapped_status = status_map.get(status, "Unknown")
+
         # Debug-Log
-        if status in status_map:
-            _LOGGER.debug("Mapped STATUS: %s -> %s", status, status_map[status])
-            return status_map[status]
-        else:
+        if mapped_status == "Unknown":
             _LOGGER.warning("Unrecognized STATUS: %s", status)
-            return "Unknown"
+        else:
+            _LOGGER.debug("Mapped STATUS: %s -> %s", status, mapped_status)
+
+        return mapped_status
 
 # Setup function for the integration
 def setup_platform(hass, config, add_entities, discovery_info=None):
