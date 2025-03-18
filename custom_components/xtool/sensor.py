@@ -9,9 +9,10 @@ _LOGGER = logging.getLogger(__name__)
 class XToolSensor(Entity):
     """Representation of a Sensor for the XTool."""
 
-    def __init__(self, name, ip_address):
+    def __init__(self, name, ip_address, device_type):
         self._name = name
         self._ip_address = ip_address
+        self._device_type = device_type.lower()
         self._state = None
         self._attributes = {}
 
@@ -35,26 +36,27 @@ class XToolSensor(Entity):
         try:
             response = requests.get(f"http://{self._ip_address}:8080/status", timeout=5)
             data = response.json()
-
+            
             _LOGGER.debug("XTool API Response: %s", data)
-
-            mode = str(data.get("mode", "")).strip().upper()
-            status = str(data.get("STATUS", "")).strip().upper()
-
-            if mode:
-                _LOGGER.debug("Detected MODE value: %s", mode)
-                self._state = self._map_mode(mode)
-                self._attributes = {}  
-            elif status:
-                _LOGGER.debug("Detected STATUS value: %s", status)
-                self._state = self._map_status(status)
-                self._attributes = {
-                    "cpu_temp": data.get("CPU_TEMP"),
-                    "water_temp": data.get("WATER_TEMP"),
-                    "purifier": data.get("Purifier")
-                }
+            
+            if self._device_type in ["f1", "p2"]:
+                mode = str(data.get("mode", "")).strip().upper()
+                if mode:
+                    _LOGGER.debug("Detected MODE value: %s", mode)
+                    self._state = self._map_mode(mode)
+                    self._attributes = {}  # No additional attributes for F1 and P2
+            elif self._device_type == "m1":
+                status = str(data.get("STATUS", "")).strip().upper()
+                if status:
+                    _LOGGER.debug("Detected STATUS value: %s", status)
+                    self._state = self._map_status(status)
+                    self._attributes = {
+                        "cpu_temp": data.get("CPU_TEMP"),
+                        "water_temp": data.get("WATER_TEMP"),
+                        "purifier": data.get("Purifier")
+                    }
             else:
-                _LOGGER.warning("Neither MODE nor STATUS found in API response!")
+                _LOGGER.warning("Unknown device type: %s", self._device_type)
                 self._state = "Unknown"
                 self._attributes = {}
         except Exception as e:
@@ -70,15 +72,13 @@ class XToolSensor(Entity):
             "P_SLEEP": "Sleep",
             "P_IDLE": "Idle"
         }
-
         mapped_mode = mode_map.get(mode, "Unknown")
-
-        # Debug-Log
+        
         if mapped_mode == "Unknown":
             _LOGGER.warning("Unrecognized MODE: %s", mode)
         else:
             _LOGGER.debug("Mapped MODE: %s -> %s", mode, mapped_mode)
-
+        
         return mapped_mode
 
     def _map_status(self, status):
@@ -90,15 +90,13 @@ class XToolSensor(Entity):
             "P_ONLINE_READY_WORK": "Ready",
             "P_IDLE": "Idle"
         }
-
         mapped_status = status_map.get(status, "Unknown")
-
-        # Debug-Log
+        
         if mapped_status == "Unknown":
             _LOGGER.warning("Unrecognized STATUS: %s", status)
         else:
             _LOGGER.debug("Mapped STATUS: %s -> %s", status, mapped_status)
-
+        
         return mapped_status
 
 # Setup function for the integration
@@ -106,6 +104,10 @@ def setup_platform(hass, config, add_entities, discovery_info=None):
     """Set up the XTool sensor platform."""
     ip_address = config.get("ip_address")
     name = config.get("name")
+    device_type = config.get("device_type")
     
-    # Add the sensor to Home Assistant
-    add_entities([XToolSensor(name, ip_address)])
+    if not ip_address or not name or not device_type:
+        _LOGGER.error("Missing configuration parameters: ip_address, name, or device_type")
+        return
+    
+    add_entities([XToolSensor(name, ip_address, device_type)])
