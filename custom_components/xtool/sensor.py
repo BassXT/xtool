@@ -59,9 +59,13 @@ class XToolSensor(Entity):
                 _LOGGER.warning("Unknown device type: %s", self._device_type)
                 self._state = "Unknown"
                 self._attributes = {}
+        except requests.exceptions.ConnectionError as e:
+            _LOGGER.debug("Connection error while fetching data from XTool: %s", e)
+            self._state = "Unavailable"
+            self._attributes = {}
         except Exception as e:
             _LOGGER.error("Error fetching data from XTool: %s", e)
-            self._state = "off"
+            self._state = "Unavailable"
             self._attributes = {}
 
     def _map_mode(self, mode):
