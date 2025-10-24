@@ -1,36 +1,36 @@
-import logging
+import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.const import CONF_NAME
-from homeassistant.core import HomeAssistant
+from .const import DOMAIN, CONF_DEVICE_TYPE, CONF_IP, SUPPORTED_DEVICE_TYPES
 
-_LOGGER = logging.getLogger(__name__)
-
-class XToolConfigFlow(config_entries.ConfigFlow, domain="xtool"):
-    """Handle a config flow for XTool."""
+class XToolConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+    """UI-Flow: Ein Gerät (Entry) hinzufügen."""
 
     VERSION = 1
 
-    def __init__(self):
-        self._ip_address = None
-
     async def async_step_user(self, user_input=None):
-        """Handle the initial step of the config flow."""
         if user_input is not None:
-            # Validierung der IP-Adresse
-            self._ip_address = user_input[CONF_NAME]
-            self.name = user_input[CONF_NAME]
+            ip = user_input[CONF_IP].strip()
+            devtype = user_input[CONF_DEVICE_TYPE].strip()
+
+            # Eindeutigkeit: dieselbe (Typ,IP)-Kombi nur einmal zulassen
+            await self.async_set_unique_id(f"{devtype}_{ip}")
+            self._abort_if_unique_id_configured()
+
             return self.async_create_entry(
-                title=self.name,
-                data={"ip_address": self._ip_address},
+                title=user_input[CONF_NAME].strip(),
+                data={
+                    CONF_NAME: user_input[CONF_NAME].strip(),
+                    CONF_IP: ip,
+                    CONF_DEVICE_TYPE: devtype,
+                },
             )
 
-        return self.async_show_form(
-            step_id="user", data_schema=self._get_schema()
+        schema = vol.Schema(
+            {
+                vol.Required(CONF_NAME): str,
+                vol.Required(CONF_IP): str,
+                vol.Required(CONF_DEVICE_TYPE): vol.In(SUPPORTED_DEVICE_TYPES),
+            }
         )
-
-    def _get_schema(self):
-        """Return the schema for the config flow."""
-        from homeassistant.helpers import config_validation as cv
-        return {
-            CONF_NAME: cv.string,
-        }
+        return self.async_show_form(step_id="user", data_schema=schema)
