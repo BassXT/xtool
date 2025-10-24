@@ -27,10 +27,16 @@ Add the following to your `configuration.yaml`:
 sensor:
   - platform: xtool
     name: p2_laser
+    device_type: p2
     ip_address: "xxx.xxx.xxx.xxx"  # Replace with the IP address of your XTool
   - platform: xtool
-    name: f1u_laser
+    device_type: f1
+    name: f1_laser
     ip_address: "xxx.xxx.xxx.xxx"  # Replace with the IP address of your XTool
+  - platform: xtool
+    device_type: m1
+    name: m1_laser
+    ip_address: "xxx.xxx.xxx.xxx"
 ```
 
 ## Usage
