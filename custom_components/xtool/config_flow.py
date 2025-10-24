@@ -13,8 +13,11 @@ class XToolConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             ip = user_input[CONF_IP]
             devtype = user_input[CONF_DEVICE_TYPE]
-            await self._async_set_unique_id(f"{devtype}_{ip}")
+
+            # WICHTIG: ohne Unterstrich aufrufen
+            await self.async_set_unique_id(f"{devtype}_{ip}")
             self._abort_if_unique_id_configured()
+
             return self.async_create_entry(
                 title=user_input[CONF_NAME],
                 data={
@@ -37,8 +40,11 @@ class XToolConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         name = import_config.get(CONF_NAME)
         ip = import_config[CONF_IP]
         devtype = import_config[CONF_DEVICE_TYPE]
-        await self._async_set_unique_id(f"{devtype}_{ip}")
+
+        # WICHTIG: ohne Unterstrich aufrufen
+        await self.async_set_unique_id(f"{devtype}_{ip}")
         self._abort_if_unique_id_configured()
+
         return self.async_create_entry(
             title=name or f"xTool {devtype}",
             data={
