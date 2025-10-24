@@ -36,7 +36,7 @@ sensor:
   - platform: xtool
     device_type: m1
     name: m1_laser
-    ip_address: "xxx.xxx.xxx.xxx"
+    ip_address: "xxx.xxx.xxx.xxx"  # Replace with the IP address of your XTool
 ```
 
 ## Usage
