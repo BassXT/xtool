@@ -1,147 +1,117 @@
 import logging
-from typing import Any, Dict
-
-import async_timeout
-from homeassistant.components.sensor import SensorEntity
+import requests
+from homeassistant.helpers.entity import Entity
 from homeassistant.const import CONF_NAME
-from homeassistant.core import HomeAssistant
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
-
-from .const import DOMAIN, CONF_IP, CONF_DEVICE_TYPE
 
 _LOGGER = logging.getLogger(__name__)
-_TIMEOUT = 5
 
+# Sensor entity
+class XToolSensor(Entity):
+    """Representation of a Sensor for the XTool."""
 
-async def async_setup_entry(
-    hass: HomeAssistant,
-    entry: ConfigEntry,
-    async_add_entities: AddEntitiesCallback,
-) -> None:
-    cfg: Dict[str, Any] = {**entry.data, **entry.options}
-    name: str = cfg[CONF_NAME]
-    ip: str = cfg[CONF_IP]
-    device_type: str = cfg[CONF_DEVICE_TYPE].lower()
-
-    if device_type in ("f1", "p2"):
-        entity = XToolFPSensor(hass, name, ip, device_type)
-    elif device_type == "m1":
-        entity = XToolM1Sensor(hass, name, ip, device_type)
-    else:
-        entity = XToolGenericSensor(hass, name, ip, device_type)
-
-    async_add_entities([entity], True)
-
-
-class XToolBase(SensorEntity):
-    def __init__(self, hass: HomeAssistant, name: str, ip: str, device_type: str) -> None:
-        self._hass = hass
-        self._name_base = name
-        self._ip = ip
-        self._device_type = device_type
-        self._attr_name = f"{name} Status"
-        self._attr_unique_id = f"{device_type}_{ip}"
-        self._state: str | None = None
-        self._attr_extra_state_attributes: Dict[str, Any] | None = None
+    def __init__(self, name, ip_address, device_type):
+        self._name = name
+        self._ip_address = ip_address
+        self._device_type = device_type.lower()
+        self._state = None
+        self._attributes = {}
 
     @property
-    def native_value(self) -> str | None:
+    def name(self):
+        """Return the name of the sensor."""
+        return self._name
+
+    @property
+    def state(self):
+        """Return the state of the sensor."""
         return self._state
 
     @property
-    def device_info(self) -> Dict[str, Any]:
-        return {
-            "identifiers": {(DOMAIN, f"{self._device_type}_{self._ip}")},
-            "name": self._name_base,
-            "manufacturer": "xTool",
-            "model": self._device_type.upper(),
-        }
+    def extra_state_attributes(self):
+        """Return additional attributes only if STATUS is used."""
+        return self._attributes if self._attributes else None
 
-    async def _fetch(self) -> Dict[str, Any] | None:
-        url = f"http://{self._ip}:8080/status"
-        session = async_get_clientsession(self._hass)
+    def update(self):
+        """Fetch the latest data from the XTool."""
         try:
-            with async_timeout.timeout(_TIMEOUT):
-                async with session.get(url) as resp:
-                    if resp.status != 200:
-                        _LOGGER.warning("HTTP %s from %s", resp.status, url)
-                        return None
-                    return await resp.json(content_type=None)
-        except Exception as exc:
-            # Ruhiges Logging: nur ein Eintrag bei echtem Fehler
-            _LOGGER.error("Request failed for %s: %s", url, exc)
-            return None
-
-
-class XToolFPSensor(XToolBase):
-    async def async_update(self) -> None:
-        data = await self._fetch()
-        if not data:
+            response = requests.get(f"http://{self._ip_address}:8080/status", timeout=5)
+            data = response.json()
+            
+            _LOGGER.debug("XTool API Response: %s", data)
+            
+            if self._device_type in ["f1", "p2"]:
+                mode = str(data.get("mode", "")).strip().upper()
+                if mode:
+                    _LOGGER.debug("Detected MODE value: %s", mode)
+                    self._state = self._map_mode(mode)
+                    self._attributes = {}  # No additional attributes for F1 and P2
+            elif self._device_type == "m1":
+                status = str(data.get("STATUS", "")).strip().upper()
+                if status:
+                    _LOGGER.debug("Detected STATUS value: %s", status)
+                    self._state = self._map_status(status)
+                    self._attributes = {
+                        "cpu_temp": data.get("CPU_TEMP"),
+                        "water_temp": data.get("WATER_TEMP"),
+                        "purifier": data.get("Purifier")
+                    }
+            else:
+                _LOGGER.warning("Unknown device type: %s", self._device_type)
+                self._state = "Unknown"
+                self._attributes = {}
+        except requests.exceptions.ConnectionError as e:
+            _LOGGER.debug("Connection error while fetching data from XTool: %s", e)
             self._state = "Unavailable"
-            self._attr_extra_state_attributes = None
-            return
+            self._attributes = {}
+        except Exception as e:
+            _LOGGER.error("Error fetching data from XTool: %s", e)
+            self._state = "Unavailable"
+            self._attributes = {}
 
-        mode = str(data.get("mode", "")).strip().upper()
-        if not mode:
-            self._state = "Unknown"
-            self._attr_extra_state_attributes = None
-            return
-
-        mapped = {
+    def _map_mode(self, mode):
+        """Map API modes to readable states."""
+        mode_map = {
             "P_WORK_DONE": "Done",
             "WORK": "Running",
             "P_SLEEP": "Sleep",
-            "P_IDLE": "Idle",
-        }.get(mode, "Unknown")
+            "P_IDLE": "Idle"
+        }
+        mapped_mode = mode_map.get(mode, "Unknown")
+        
+        if mapped_mode == "Unknown":
+            _LOGGER.warning("Unrecognized MODE: %s", mode)
+        else:
+            _LOGGER.debug("Mapped MODE: %s -> %s", mode, mapped_mode)
+        
+        return mapped_mode
 
-        if mapped == "Unknown":
-            _LOGGER.warning("Unrecognized MODE '%s' for %s", mode, self._attr_unique_id)
-
-        self._state = mapped
-        self._attr_extra_state_attributes = None
-
-
-class XToolM1Sensor(XToolBase):
-    async def async_update(self) -> None:
-        data = await self._fetch()
-        if not data:
-            self._state = "Unavailable"
-            self._attr_extra_state_attributes = None
-            return
-
-        status = str(data.get("STATUS", "")).strip().upper()
-        if not status:
-            self._state = "Unknown"
-            self._attr_extra_state_attributes = None
-            return
-
-        mapped = {
+    def _map_status(self, status):
+        """Map API STATUS values to readable states."""
+        status_map = {
             "P_FINISH": "Done",
             "P_WORKING": "Running",
             "P_SLEEP": "Sleep",
             "P_ONLINE_READY_WORK": "Ready",
-            "P_IDLE": "Idle",
-        }.get(status, "Unknown")
-
-        if mapped == "Unknown":
-            _LOGGER.warning("Unrecognized STATUS '%s' for %s", status, self._attr_unique_id)
-
-        self._state = mapped
-        self._attr_extra_state_attributes = {
-            "cpu_temp": data.get("CPU_TEMP"),
-            "water_temp": data.get("WATER_TEMP"),
-            "purifier": data.get("Purifier"),
+            "P_IDLE": "Idle"
         }
+        mapped_status = status_map.get(status, "Unknown")
+        
+        if mapped_status == "Unknown":
+            _LOGGER.warning("Unrecognized STATUS: %s", status)
+        else:
+            _LOGGER.debug("Mapped STATUS: %s -> %s", status, mapped_status)
+        
+        return mapped_status
 
-
-class XToolGenericSensor(XToolBase):
-    async def async_update(self) -> None:
-        data = await self._fetch()
-        if not data:
-            self._state = "Unavailable"
-            self._attr_extra_state_attributes = None
-            return
-        self._state = "Unknown"
-        self._attr_extra_state_attributes = None
+# Setup function for the integration
+def setup_platform(hass, config, add_entities, discovery_info=None):
+    """Set up the XTool sensor platform."""
+    ip_address = config.get("ip_address")
+    name = config.get("name")
+    device_type = config.get("device_type")
+    
+    if not ip_address or not name or not device_type:
+        _LOGGER.error("Missing configuration parameters: ip_address, name, or device_type")
+        return
+    
+    add_entities([XToolSensor(name, ip_address, device_type)])
