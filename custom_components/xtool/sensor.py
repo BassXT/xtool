@@ -3,6 +3,14 @@ import requests
 from homeassistant.helpers.entity import Entity
 from homeassistant.const import CONF_NAME
 
+# NEU: Importe für Config-Entry-Setup
+from homeassistant.core import HomeAssistant
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
+
+# NEU: Keys aus deinem const.py (müssen zu config_flow passen)
+from .const import CONF_IP, CONF_DEVICE_TYPE
+
 _LOGGER = logging.getLogger(__name__)
 
 # Sensor entity
@@ -36,9 +44,9 @@ class XToolSensor(Entity):
         try:
             response = requests.get(f"http://{self._ip_address}:8080/status", timeout=5)
             data = response.json()
-            
+
             _LOGGER.debug("XTool API Response: %s", data)
-            
+
             if self._device_type in ["f1", "p2"]:
                 mode = str(data.get("mode", "")).strip().upper()
                 if mode:
@@ -77,12 +85,12 @@ class XToolSensor(Entity):
             "P_IDLE": "Idle"
         }
         mapped_mode = mode_map.get(mode, "Unknown")
-        
+
         if mapped_mode == "Unknown":
             _LOGGER.warning("Unrecognized MODE: %s", mode)
         else:
             _LOGGER.debug("Mapped MODE: %s -> %s", mode, mapped_mode)
-        
+
         return mapped_mode
 
     def _map_status(self, status):
@@ -95,23 +103,44 @@ class XToolSensor(Entity):
             "P_IDLE": "Idle"
         }
         mapped_status = status_map.get(status, "Unknown")
-        
+
         if mapped_status == "Unknown":
             _LOGGER.warning("Unrecognized STATUS: %s", status)
         else:
             _LOGGER.debug("Mapped STATUS: %s -> %s", status, mapped_status)
-        
+
         return mapped_status
 
-# Setup function for the integration
+# NEU: Setup über Config Entries (UI / config_flow)
+async def async_setup_entry(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
+    """Set up XTool sensor from a config entry."""
+    data = entry.data
+    name = data.get(CONF_NAME)
+    ip_address = data.get(CONF_IP)
+    device_type = data.get(CONF_DEVICE_TYPE)
+
+    if not ip_address or not name or not device_type:
+        _LOGGER.error(
+            "Missing config entry data: name, ip, or device_type (entry_id=%s)",
+            entry.entry_id,
+        )
+        return
+
+    async_add_entities([XToolSensor(name, ip_address, device_type)], update_before_add=False)
+
+# BESTEHEND: YAML-/platform-Setup (optional, bleibt unverändert nutzbar)
 def setup_platform(hass, config, add_entities, discovery_info=None):
     """Set up the XTool sensor platform."""
     ip_address = config.get("ip_address")
     name = config.get("name")
     device_type = config.get("device_type")
-    
+
     if not ip_address or not name or not device_type:
         _LOGGER.error("Missing configuration parameters: ip_address, name, or device_type")
         return
-    
+
     add_entities([XToolSensor(name, ip_address, device_type)])
