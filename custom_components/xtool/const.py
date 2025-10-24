@@ -1,4 +1,12 @@
 DOMAIN = "xtool"
+
+CONF_NAME = "name"
+CONF_IP = "ip"
 CONF_DEVICE_TYPE = "device_type"
-CONF_IP = "ip_address"
-SUPPORTED_DEVICE_TYPES = ["f1", "p2", "m1"]
+
+
+SUPPORTED_DEVICE_TYPES = [
+    "F1",
+    "P2",
+    "M1",
+]
