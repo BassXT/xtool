@@ -7,5 +7,5 @@
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/BassXT/xtool/issues",
   "requirements": [],
-  "version": "2.0.0"
+  "version": "2.0.1"
 }
