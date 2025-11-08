@@ -39,7 +39,7 @@ class XToolSensor(Entity):
             
             _LOGGER.debug("XTool API Response: %s", data)
             
-            if self._device_type in ["f1", "p2"]:
+            if self._device_type in ["f1", "p2", "apparel"]:
                 mode = str(data.get("mode", "")).strip().upper()
                 if mode:
                     _LOGGER.debug("Detected MODE value: %s", mode)
