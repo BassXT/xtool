@@ -120,22 +120,23 @@ mode: single
 
 ### 🔹 3. Prevent blinds from closing while Laser2 (P2) is on
 ```yaml
-alias: Laser2 – Prevent Blinds Closing
-description: Stop blinds automation while Laser2 (P2) is powered on
-triggers:
-  - trigger: state
-    entity_id: binary_sensor.laser2_p2_power
-conditions:
+alias: Blinds – Safe Close with Laser2 Check
+description: Prevent blinds from closing if Laser2 (P2) is powered on
+trigger:
+  - platform: state
+    entity_id: cover.living_room_blinds
+    to: closing
+condition:
   - condition: state
     entity_id: binary_sensor.laser2_p2_power
     state: "on"
-actions:
+action:
   - service: cover.stop_cover
     target:
       entity_id: cover.living_room_blinds
   - service: notify.mobile_app_my_phone
     data:
-      message: "⚠️ Laser2 (P2) is ON – blinds movement stopped for safety."
+      message: "⚠️ Blinds closing blocked: Laser2 (P2) is currently powered ON."
 mode: single
 ```
 
