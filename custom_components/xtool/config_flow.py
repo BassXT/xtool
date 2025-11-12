@@ -1,36 +1,44 @@
-import logging
+from __future__ import annotations
+
+import voluptuous as vol
+
 from homeassistant import config_entries
 from homeassistant.const import CONF_NAME
-from homeassistant.core import HomeAssistant
+from homeassistant.data_entry_flow import FlowResult
+from homeassistant.helpers import config_validation as cv
 
-_LOGGER = logging.getLogger(__name__)
+from .const import (
+    DOMAIN,
+    CONF_IP_ADDRESS,
+    CONF_DEVICE_TYPE,
+    SUPPORTED_DEVICE_TYPES,
+)
 
-class XToolConfigFlow(config_entries.ConfigFlow, domain="xtool"):
-    """Handle a config flow for XTool."""
+
+class XToolConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+    """Erstkonfiguration per UI."""
 
     VERSION = 1
 
-    def __init__(self):
-        self._ip_address = None
-
-    async def async_step_user(self, user_input=None):
-        """Handle the initial step of the config flow."""
+    async def async_step_user(self, user_input: dict | None = None) -> FlowResult:
         if user_input is not None:
-            # Validierung der IP-Adresse
-            self._ip_address = user_input[CONF_NAME]
-            self.name = user_input[CONF_NAME]
+            # title = Name, den du vergibst -> Basis für entity_ids
             return self.async_create_entry(
-                title=self.name,
-                data={"ip_address": self._ip_address},
+                title=user_input[CONF_NAME],
+                data={
+                    CONF_NAME: user_input[CONF_NAME],
+                    CONF_IP_ADDRESS: user_input[CONF_IP_ADDRESS],
+                    CONF_DEVICE_TYPE: user_input[CONF_DEVICE_TYPE],
+                },
             )
 
-        return self.async_show_form(
-            step_id="user", data_schema=self._get_schema()
+        schema = vol.Schema(
+            {
+                vol.Required(CONF_NAME): cv.string,                    # z. B. "p2"
+                vol.Required(CONF_IP_ADDRESS): cv.string,              # 192.168.x.x
+                vol.Required(CONF_DEVICE_TYPE, default="p2"): vol.In(  # nur gültige Modelle
+                    SUPPORTED_DEVICE_TYPES
+                ),
+            }
         )
-
-    def _get_schema(self):
-        """Return the schema for the config flow."""
-        from homeassistant.helpers import config_validation as cv
-        return {
-            CONF_NAME: cv.string,
-        }
+        return self.async_show_form(step_id="user", data_schema=schema)
