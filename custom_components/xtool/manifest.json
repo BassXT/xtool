@@ -1,11 +1,13 @@
 {
   "domain": "xtool",
   "name": "XTool",
-  "codeowners": ["@BassXT"],
-  "dependencies": [],
+  "version": "2.1.0",
   "documentation": "https://github.com/BassXT/xtool",
-  "iot_class": "local_polling",
+  "requirements": ["requests"],
+  "codeowners": ["@BassXT"],
+  "config_flow": true,
   "issue_tracker": "https://github.com/BassXT/xtool/issues",
-  "requirements": [],
-  "version": "2.0.1"
+  "iot_class": "local_polling",
+  "integration_type": "device",
+  "loggers": ["custom_components.xtool"]
 }
