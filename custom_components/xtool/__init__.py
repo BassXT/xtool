@@ -5,9 +5,9 @@ import logging
 from typing import Any
 
 import requests
-
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .const import (
@@ -19,6 +19,9 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+# Diese Integration hat keine YAML-Konfiguration und wird ausschließlich über Config Entries (UI) eingerichtet.
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 
 class XToolCoordinator(DataUpdateCoordinator[dict[str, Any]]):
