@@ -1,6 +1,6 @@
 DOMAIN = "xtool"
 
-PLATFORMS: list[str] = ["sensor", "binary_sensor"]
+PLATFORMS: list[str] = ["sensor", "binary_sensor", "camera"]
 
 CONF_IP_ADDRESS = "ip_address"
 CONF_DEVICE_TYPE = "device_type"
