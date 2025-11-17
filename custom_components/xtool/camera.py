@@ -11,8 +11,10 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
+from . import XToolCoordinator
 from .const import (
     DOMAIN,
     CONF_IP_ADDRESS,
@@ -24,8 +26,8 @@ _LOGGER = logging.getLogger(__name__)
 
 
 STREAM_PATHS: dict[int, str] = {
-    0: "/camera/snap?stream=0",  # overview
-    1: "/camera/snap?stream=1",  # close-up
+    0: "/camera/snap?stream=0",
+    1: "/camera/snap?stream=1",
 }
 
 MIN_SNAPSHOT_INTERVAL = timedelta(seconds=30)
@@ -36,9 +38,12 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
+    data = hass.data[DOMAIN][entry.entry_id]
+    coordinator: XToolCoordinator = data["coordinator"]
+    base_name: str = data["name"]
+
     ip_address: str = entry.data[CONF_IP_ADDRESS]
     device_type: str = entry.data[CONF_DEVICE_TYPE].lower()
-    base_name: str = entry.title
 
     if device_type != "p2":
         _LOGGER.debug(
@@ -55,14 +60,30 @@ async def async_setup_entry(
     )
 
     cameras = [
-        XToolCamera(hass, entry, ip_address, base_name, device_type, index=0),
-        XToolCamera(hass, entry, ip_address, base_name, device_type, index=1),
+        XToolCamera(
+            hass,
+            entry,
+            coordinator,
+            ip_address,
+            base_name,
+            device_type,
+            index=0,
+        ),
+        XToolCamera(
+            hass,
+            entry,
+            coordinator,
+            ip_address,
+            base_name,
+            device_type,
+            index=1,
+        ),
     ]
 
     async_add_entities(cameras)
 
 
-class XToolCamera(Camera):
+class XToolCamera(CoordinatorEntity[XToolCoordinator], Camera):
     _attr_has_entity_name = True
     _attr_should_poll = False
 
@@ -70,12 +91,14 @@ class XToolCamera(Camera):
         self,
         hass: HomeAssistant,
         entry: ConfigEntry,
+        coordinator: XToolCoordinator,
         ip_address: str,
         base_name: str,
         device_type: str,
         index: int,
     ) -> None:
-        super().__init__()
+        CoordinatorEntity.__init__(self, coordinator)
+        Camera.__init__(self)
 
         self.hass = hass
         self._entry = entry
@@ -114,12 +137,29 @@ class XToolCamera(Camera):
     def supported_features(self) -> CameraEntityFeature:
         return CameraEntityFeature(0)
 
+    def _is_unavailable(self) -> bool:
+        data = self.coordinator.data or {}
+        return bool(data.get("_unavailable"))
+
+    @property
+    def available(self) -> bool:
+        if self._is_unavailable():
+            return False
+
+        if not self.coordinator.last_update_success:
+            return False
+
+        return True
+
     def camera_image(
         self,
         width: Optional[int] = None,
         height: Optional[int] = None,
     ) -> bytes | None:
         now = dt_util.utcnow()
+
+        if self._is_unavailable():
+            return self._last_image
 
         if (
             self._last_image is not None
@@ -142,7 +182,11 @@ class XToolCamera(Camera):
             return None
 
         url = f"http://{self._ip}:8329{path}"
-        _LOGGER.debug("Requesting xTool P2 snapshot (Camera %s) from URL: %s", index, url)
+        _LOGGER.debug(
+            "Requesting xTool P2 snapshot (Camera %s) from URL: %s",
+            index,
+            url,
+        )
 
         try:
             response = requests.get(url, timeout=5)
