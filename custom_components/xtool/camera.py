@@ -45,7 +45,7 @@ async def async_setup_entry(
     ip_address: str = entry.data[CONF_IP_ADDRESS]
     device_type: str = entry.data[CONF_DEVICE_TYPE].lower()
 
-    if device_type != "p2":
+    if device_type not in ("p2", "p3"):
         _LOGGER.debug(
             "xTool device type '%s' is not P2 – no camera entities created.",
             device_type,
