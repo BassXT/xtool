@@ -15,6 +15,14 @@ from .const import (
 )
 
 
+def _device_type_options() -> list[str]:
+    """Return selectable device type options from const.py."""
+    # SUPPORTED_DEVICE_TYPES can be a dict or list/tuple/set.
+    if isinstance(SUPPORTED_DEVICE_TYPES, dict):
+        return list(SUPPORTED_DEVICE_TYPES.keys())
+    return list(SUPPORTED_DEVICE_TYPES)
+
+
 class XToolConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Erstkonfiguration per UI."""
 
@@ -22,7 +30,6 @@ class XToolConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_user(self, user_input: dict | None = None) -> FlowResult:
         if user_input is not None:
-            # title = Name, den du vergibst -> Basis für entity_ids
             return self.async_create_entry(
                 title=user_input[CONF_NAME],
                 data={
@@ -32,13 +39,13 @@ class XToolConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 },
             )
 
+        options = _device_type_options()
+
         schema = vol.Schema(
             {
-                vol.Required(CONF_NAME): cv.string,                    # z. B. "p2"
-                vol.Required(CONF_IP_ADDRESS): cv.string,              # 192.168.x.x
-                vol.Required(CONF_DEVICE_TYPE, default="p2"): vol.In(  # nur gültige Modelle
-                    SUPPORTED_DEVICE_TYPES
-                ),
+                vol.Required(CONF_NAME): cv.string,       # z. B. "Laser Werkstatt"
+                vol.Required(CONF_IP_ADDRESS): cv.string, # 192.168.x.x
+                vol.Required(CONF_DEVICE_TYPE): vol.In(options),  # kein Default
             }
         )
         return self.async_show_form(step_id="user", data_schema=schema)
