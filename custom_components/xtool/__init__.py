@@ -131,14 +131,22 @@ class XToolCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         out["alarm_present"] = len(self._warnings_list(out["alarm_current"])) > 0
         return out
 
-    def _normalize_gap(self, raw: Any) -> dict[str, Any]:
-        """Normalize lid/gap state."""
-        lid_open = None
-        if isinstance(raw, dict):
-            data = raw.get("data") if isinstance(raw.get("data"), dict) else {}
-            if str(data.get("state", "")).lower() in {"on", "off"}:
-                lid_open = (str(data.get("state", "")).lower() == "off") # off means open for M1U
-        return {"lid_open": lid_open}
+   def _normalize_gap(self, raw: Any) -> dict[str, Any]:
+    """Normalize lid/gap state."""
+    lid_open = None
+
+    if isinstance(raw, dict):
+        data = raw.get("data") if isinstance(raw.get("data"), dict) else {}
+        state = str(data.get("state", "")).lower()
+
+        if state in {"on", "off"}:
+            # M1 Ultra uses inverted logic
+            if self.device_type in ("m1u", "m1 ultra"):
+                lid_open = (state == "off")   # off = open (M1U)
+            else:
+                lid_open = (state == "on")    # on = open (P2/F1/M1)
+
+    return {"lid_open": lid_open}
 
     def _normalize_smoking_fan(self, raw: Any) -> dict[str, Any]:
         """Normalize exhaust fan state and connectivity."""
@@ -400,4 +408,5 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
         hass.data[DOMAIN].pop(entry.entry_id, None)
+
     return unload_ok
