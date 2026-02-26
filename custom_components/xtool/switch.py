@@ -10,19 +10,32 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN, MANUFACTURER
 
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
+    """Set up switch entities."""
     store = hass.data[DOMAIN][entry.entry_id]
     coordinator = store["coordinator"]
     name: str = store["name"]
     entry_id: str = store["entry_id"]
     device_type: str = store.get("device_type", "").lower()
 
-    if device_type != "d1":
-        async_add_entities([XToolExhaustFanSwitch(coordinator, name, entry_id, device_type)])
+    entities: list[SwitchEntity] = []
+
+    # D1 has its own API stack -> no v2 peripheral switches here
+    if device_type == "d1":
+        async_add_entities(entities, True)
+        return
+
+    # F1: no exhaust fan control 
+    # M1 Ultra: keep as-is (it supports peripherals)
+    if device_type != "f1":
+        entities.append(XToolExhaustFanSwitch(coordinator, name, entry_id, device_type))
+
+    async_add_entities(entities, True)
 
 
 class XToolExhaustFanSwitch(CoordinatorEntity, SwitchEntity):
@@ -49,7 +62,10 @@ class XToolExhaustFanSwitch(CoordinatorEntity, SwitchEntity):
     @property
     def available(self) -> bool:
         data = self.coordinator.data or {}
-        return not bool(data.get("_unavailable"))
+        # Only available if device is reachable AND the endpoint exists / state is present
+        if bool(data.get("_unavailable")):
+            return False
+        return data.get("fan_state") is not None
 
     @property
     def is_on(self) -> bool | None:
@@ -61,12 +77,16 @@ class XToolExhaustFanSwitch(CoordinatorEntity, SwitchEntity):
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         await self.coordinator.hass.async_add_executor_job(
-            self.coordinator._post, "/peripheral/smoking_fan", {"action": "on"}
+            self.coordinator._post,
+            "/peripheral/smoking_fan",
+            {"action": "on"},
         )
         await self.coordinator.async_request_refresh()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         await self.coordinator.hass.async_add_executor_job(
-            self.coordinator._post, "/peripheral/smoking_fan", {"action": "off"}
+            self.coordinator._post,
+            "/peripheral/smoking_fan",
+            {"action": "off"},
         )
         await self.coordinator.async_request_refresh()
