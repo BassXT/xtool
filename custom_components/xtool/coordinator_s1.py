@@ -57,8 +57,9 @@ class XToolS1Coordinator(DataUpdateCoordinator[dict[str, Any]]):
             ok = await self.api.connect()
             if not ok:
                 raise UpdateFailed(f"Cannot connect to S1 at {self.ip_address}:8081")
-            # Request a full status dump and wait briefly for the device to push it back
+            # Request full status dump and air cleaner state, wait briefly for pushes
             await self.api.request_status()
+            await self.api.request_purifier_status()
             await asyncio.sleep(_INITIAL_WAIT)
 
         # Send keepalive / position refresh

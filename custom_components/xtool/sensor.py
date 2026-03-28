@@ -52,7 +52,13 @@ async def async_setup_entry(
                 S1FanBSensor(coordinator, name, entry_id, device_type),
                 S1PurifierModelSensor(coordinator, name, entry_id, device_type),
                 S1PurifierSpeedSensor(coordinator, name, entry_id, device_type),
-                S1PurifierHumiditySensor(coordinator, name, entry_id, device_type),
+                S1PurifierSensorDSensor(coordinator, name, entry_id, device_type),
+                S1PurifierSensorSSensor(coordinator, name, entry_id, device_type),
+                S1FilterPreSensor(coordinator, name, entry_id, device_type),
+                S1FilterMediumSensor(coordinator, name, entry_id, device_type),
+                S1FilterCarbonSensor(coordinator, name, entry_id, device_type),
+                S1FilterDenseCarbonSensor(coordinator, name, entry_id, device_type),
+                S1FilterHepaSensor(coordinator, name, entry_id, device_type),
             ]
         )
         async_add_entities(entities, True)
@@ -703,22 +709,112 @@ class S1PurifierSpeedSensor(_BaseSensor):
         return self._data().get("purifier_speed")
 
 
-class S1PurifierHumiditySensor(_BaseSensor):
-    _attr_icon = "mdi:water-percent"
-    _attr_native_unit_of_measurement = PERCENTAGE
+class S1PurifierSensorDSensor(_BaseSensor):
+    # NOTE: field D from M9039 — exact meaning unconfirmed
+    _attr_icon = "mdi:gauge"
     _attr_state_class = SensorStateClass.MEASUREMENT
 
     def __init__(self, coordinator, name: str, entry_id: str, device_type: str) -> None:
         super().__init__(coordinator, name, entry_id, device_type)
-        self._attr_name = "Air Cleaner Humidity"
-        self._attr_unique_id = f"{entry_id}_s1_purifier_humidity"
+        self._attr_name = "Air Purifier Sensor D"
+        self._attr_unique_id = f"{entry_id}_s1_purifier_sensor_d"
 
     @property
     def available(self) -> bool:
-        if self._unavailable():
-            return False
-        return self._data().get("purifier_humidity") is not None
+        return (
+            self.coordinator.last_update_success
+            and not self._unavailable()
+            and self._data().get("purifier_sensor_d") is not None
+        )
 
     @property
     def native_value(self) -> Any:
-        return self._data().get("purifier_humidity")
+        return self._data().get("purifier_sensor_d")
+
+
+class S1PurifierSensorSSensor(_BaseSensor):
+    # NOTE: field S from M9039 — exact meaning unconfirmed
+    _attr_icon = "mdi:gauge"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(self, coordinator, name: str, entry_id: str, device_type: str) -> None:
+        super().__init__(coordinator, name, entry_id, device_type)
+        self._attr_name = "Air Purifier Sensor S"
+        self._attr_unique_id = f"{entry_id}_s1_purifier_sensor_s"
+
+    @property
+    def available(self) -> bool:
+        return (
+            self.coordinator.last_update_success
+            and not self._unavailable()
+            and self._data().get("purifier_sensor_s") is not None
+        )
+
+    @property
+    def native_value(self) -> Any:
+        return self._data().get("purifier_sensor_s")
+
+
+class _S1FilterSensor(_BaseSensor):
+    """Base class for AP2 filter lifetime sensors."""
+    _attr_icon = "mdi:air-filter"
+    _attr_native_unit_of_measurement = PERCENTAGE
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _filter_key: str = ""
+
+    @property
+    def available(self) -> bool:
+        return (
+            self.coordinator.last_update_success
+            and not self._unavailable()
+            and self._data().get(self._filter_key) is not None
+        )
+
+    @property
+    def native_value(self) -> Any:
+        return self._data().get(self._filter_key)
+
+
+class S1FilterPreSensor(_S1FilterSensor):
+    _filter_key = "filter_pre"
+
+    def __init__(self, coordinator, name: str, entry_id: str, device_type: str) -> None:
+        super().__init__(coordinator, name, entry_id, device_type)
+        self._attr_name = "Pre-filter Remaining"
+        self._attr_unique_id = f"{entry_id}_s1_filter_pre"
+
+
+class S1FilterMediumSensor(_S1FilterSensor):
+    _filter_key = "filter_medium"
+
+    def __init__(self, coordinator, name: str, entry_id: str, device_type: str) -> None:
+        super().__init__(coordinator, name, entry_id, device_type)
+        self._attr_name = "Medium Efficiency Filter Remaining"
+        self._attr_unique_id = f"{entry_id}_s1_filter_medium"
+
+
+class S1FilterCarbonSensor(_S1FilterSensor):
+    _filter_key = "filter_carbon"
+
+    def __init__(self, coordinator, name: str, entry_id: str, device_type: str) -> None:
+        super().__init__(coordinator, name, entry_id, device_type)
+        self._attr_name = "Activated Carbon Filter Remaining"
+        self._attr_unique_id = f"{entry_id}_s1_filter_carbon"
+
+
+class S1FilterDenseCarbonSensor(_S1FilterSensor):
+    _filter_key = "filter_dense_carbon"
+
+    def __init__(self, coordinator, name: str, entry_id: str, device_type: str) -> None:
+        super().__init__(coordinator, name, entry_id, device_type)
+        self._attr_name = "Ultra Dense Carbon Mesh Filter Remaining"
+        self._attr_unique_id = f"{entry_id}_s1_filter_dense_carbon"
+
+
+class S1FilterHepaSensor(_S1FilterSensor):
+    _filter_key = "filter_hepa"
+
+    def __init__(self, coordinator, name: str, entry_id: str, device_type: str) -> None:
+        super().__init__(coordinator, name, entry_id, device_type)
+        self._attr_name = "High Efficiency Filter Remaining"
+        self._attr_unique_id = f"{entry_id}_s1_filter_hepa"

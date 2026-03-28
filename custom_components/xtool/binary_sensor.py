@@ -199,7 +199,7 @@ class S1AlarmBinarySensor(_BaseBinary):
 
     @property
     def available(self) -> bool:
-        return not self._unavailable()
+        return self.coordinator.last_update_success and not self._unavailable()
 
     @property
     def is_on(self) -> bool:
@@ -217,9 +217,11 @@ class S1PurifierRunningBinarySensor(_BaseBinary):
 
     @property
     def available(self) -> bool:
-        if self._unavailable():
-            return False
-        return self._data().get("purifier_on") is not None
+        return (
+            self.coordinator.last_update_success
+            and not self._unavailable()
+            and self._data().get("purifier_on") is not None
+        )
 
     @property
     def is_on(self) -> bool:

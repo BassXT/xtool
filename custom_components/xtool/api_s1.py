@@ -26,9 +26,14 @@ _M222_RE = re.compile(r'S(\S+)')
 _M810_RE = re.compile(r'"([^"]*)"')
 # Regex for M303 "X... Y..."
 _M303_RE = re.compile(r'X([+-]?\d+\.\d+)\s+Y([+-]?\d+\.\d+)')
-# Regex for M9039 purifier: speed field "A{n}" (on) or "C{n}" (off), humidity "H{n}"
+# Regex for M9039 purifier: speed field "A{n}" (on) or "C{n}" (off), filter remaining H-L
 _M9039_SPEED_RE = re.compile(r'([AC])(\d+)')
-_M9039_H_RE = re.compile(r'H(\d+)')
+# Filter remaining fields: H=pre-filter, I=medium efficiency, J=activated carbon,
+# K=ultra dense carbon mesh, L=high efficiency
+_M9039_FILTERS_RE = re.compile(r'H(\d+).*I(\d+).*J(\d+).*K(\d+).*L(\d+)')
+# Unknown fields D and S
+_M9039_D_RE = re.compile(r'D(\d+)')
+_M9039_S_RE = re.compile(r'S(\d+)')
 
 
 def _parse_m27(val: str) -> dict[str, Any]:
@@ -130,6 +135,10 @@ class XToolS1Api:
         """Send M303 as keepalive/position refresh."""
         await self._send("M303\n")
 
+    async def request_purifier_status(self) -> None:
+        """Send M9039 to request current air cleaner state."""
+        await self._send("M9039\n")
+
     async def _send(self, text: str) -> None:
         if not self.connected:
             return
@@ -144,6 +153,16 @@ class XToolS1Api:
             async for msg in self._ws:
                 if msg.type == WSMsgType.TEXT:
                     self._handle_message(msg.data)
+                elif msg.type == WSMsgType.BINARY:
+                    # Some messages (e.g. M9039) arrive as binary frames with a
+                    # binary header/footer. Extract the M-code text payload.
+                    try:
+                        decoded = msg.data.decode("latin-1")
+                        m = re.search(r'(M\d+ \S.*)', decoded)
+                        if m:
+                            self._handle_message(m.group(1))
+                    except Exception as err:
+                        _LOGGER.debug("S1 %s binary frame parse error: %s", self._ip, err)
                 elif msg.type in (WSMsgType.CLOSE, WSMsgType.ERROR, WSMsgType.CLOSED):
                     break
         except asyncio.CancelledError:
@@ -213,10 +232,21 @@ class XToolS1Api:
                     speed = 0 if prefix == "C" else num
                     self._state["purifier_speed"] = speed
                     self._state["purifier_on"] = speed > 0
-                # H{n} = humidity percent
-                h = _M9039_H_RE.search(body)
-                if h:
-                    self._state["purifier_humidity"] = int(h.group(1))
+                # H-L = filter remaining percentages
+                f = _M9039_FILTERS_RE.search(body)
+                if f:
+                    self._state["filter_pre"] = int(f.group(1))
+                    self._state["filter_medium"] = int(f.group(2))
+                    self._state["filter_carbon"] = int(f.group(3))
+                    self._state["filter_dense_carbon"] = int(f.group(4))
+                    self._state["filter_hepa"] = int(f.group(5))
+                # D and S = unknown fields
+                d = _M9039_D_RE.search(body)
+                if d:
+                    self._state["purifier_sensor_d"] = int(d.group(1))
+                s = _M9039_S_RE.search(body)
+                if s:
+                    self._state["purifier_sensor_s"] = int(s.group(1))
 
         except Exception as err:
             _LOGGER.debug("S1 %s message parse error: %s | text=%r", self._ip, err, text)
