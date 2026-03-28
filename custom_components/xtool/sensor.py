@@ -716,7 +716,7 @@ class S1PurifierSensorDSensor(_BaseSensor):
 
     def __init__(self, coordinator, name: str, entry_id: str, device_type: str) -> None:
         super().__init__(coordinator, name, entry_id, device_type)
-        self._attr_name = "Air Purifier Sensor D"
+        self._attr_name = "Air Cleaner Sensor D"
         self._attr_unique_id = f"{entry_id}_s1_purifier_sensor_d"
 
     @property
@@ -739,7 +739,7 @@ class S1PurifierSensorSSensor(_BaseSensor):
 
     def __init__(self, coordinator, name: str, entry_id: str, device_type: str) -> None:
         super().__init__(coordinator, name, entry_id, device_type)
-        self._attr_name = "Air Purifier Sensor S"
+        self._attr_name = "Air Cleaner Sensor S"
         self._attr_unique_id = f"{entry_id}_s1_purifier_sensor_s"
 
     @property
