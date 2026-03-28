@@ -10,6 +10,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN, MANUFACTURER
+from .coordinator_s1 import XToolS1Coordinator
 
 
 async def async_setup_entry(
@@ -34,6 +35,24 @@ async def async_setup_entry(
                 D1WorkingTimeSensor(coordinator, name, entry_id, device_type),
                 D1LineSensor(coordinator, name, entry_id, device_type),
                 D1MachineTypeSensor(coordinator, name, entry_id, device_type),
+            ]
+        )
+        async_add_entities(entities, True)
+        return
+
+    if device_type == "s1":
+        entities.extend(
+            [
+                S1StatusSensor(coordinator, name, entry_id, device_type),
+                S1FirmwareSensor(coordinator, name, entry_id, device_type),
+                S1JobFileSensor(coordinator, name, entry_id, device_type),
+                S1PositionXSensor(coordinator, name, entry_id, device_type),
+                S1PositionYSensor(coordinator, name, entry_id, device_type),
+                S1FanASensor(coordinator, name, entry_id, device_type),
+                S1FanBSensor(coordinator, name, entry_id, device_type),
+                S1PurifierModelSensor(coordinator, name, entry_id, device_type),
+                S1PurifierSpeedSensor(coordinator, name, entry_id, device_type),
+                S1PurifierHumiditySensor(coordinator, name, entry_id, device_type),
             ]
         )
         async_add_entities(entities, True)
@@ -530,3 +549,176 @@ class XToolMultiFunctionModuleSensor(_BaseSensor):
 
         mapping = {0: "Empty / Not synced", 22: "Embossing", 23: "Knife blade", 24: "Rotary blade"}
         return mapping.get(val_int, f"Unknown ({val_int})")
+
+
+# --- S1 ---
+
+class S1StatusSensor(_BaseSensor):
+    _attr_icon = "mdi:laser-pointer"
+
+    def __init__(self, coordinator, name: str, entry_id: str, device_type: str) -> None:
+        super().__init__(coordinator, name, entry_id, device_type)
+        self._attr_name = "Status"
+        self._attr_unique_id = f"{entry_id}_s1_status"
+
+    @property
+    def native_value(self) -> str:
+        if self._unavailable():
+            return "Unavailable"
+        raw = self._data().get("work_state_raw")
+        return XToolS1Coordinator.map_work_state(raw)
+
+
+class S1FirmwareSensor(_BaseSensor):
+    _attr_icon = "mdi:chip"
+
+    def __init__(self, coordinator, name: str, entry_id: str, device_type: str) -> None:
+        super().__init__(coordinator, name, entry_id, device_type)
+        self._attr_name = "Firmware Version"
+        self._attr_unique_id = f"{entry_id}_s1_firmware"
+
+    @property
+    def native_value(self) -> Any:
+        if self._unavailable():
+            return None
+        return self._data().get("firmware_version")
+
+
+class S1JobFileSensor(_BaseSensor):
+    _attr_icon = "mdi:file-outline"
+
+    def __init__(self, coordinator, name: str, entry_id: str, device_type: str) -> None:
+        super().__init__(coordinator, name, entry_id, device_type)
+        self._attr_name = "Job File"
+        self._attr_unique_id = f"{entry_id}_s1_job"
+
+    @property
+    def native_value(self) -> Any:
+        if self._unavailable():
+            return None
+        # API normalizes "NULL" -> None; None renders as unavailable in HA
+        return self._data().get("job_file")
+
+
+class S1PositionXSensor(_BaseSensor):
+    _attr_icon = "mdi:axis-x-arrow"
+    _attr_native_unit_of_measurement = "mm"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(self, coordinator, name: str, entry_id: str, device_type: str) -> None:
+        super().__init__(coordinator, name, entry_id, device_type)
+        self._attr_name = "Position X"
+        self._attr_unique_id = f"{entry_id}_s1_pos_x"
+
+    @property
+    def native_value(self) -> Any:
+        if self._unavailable():
+            return None
+        return self._data().get("pos_x")
+
+
+class S1PositionYSensor(_BaseSensor):
+    _attr_icon = "mdi:axis-y-arrow"
+    _attr_native_unit_of_measurement = "mm"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(self, coordinator, name: str, entry_id: str, device_type: str) -> None:
+        super().__init__(coordinator, name, entry_id, device_type)
+        self._attr_name = "Position Y"
+        self._attr_unique_id = f"{entry_id}_s1_pos_y"
+
+    @property
+    def native_value(self) -> Any:
+        if self._unavailable():
+            return None
+        return self._data().get("pos_y")
+
+
+class S1FanASensor(_BaseSensor):
+    _attr_icon = "mdi:fan"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(self, coordinator, name: str, entry_id: str, device_type: str) -> None:
+        super().__init__(coordinator, name, entry_id, device_type)
+        self._attr_name = "Fan A"
+        self._attr_unique_id = f"{entry_id}_s1_fan_a"
+
+    @property
+    def native_value(self) -> Any:
+        if self._unavailable():
+            return None
+        return self._data().get("fan_a")
+
+
+class S1FanBSensor(_BaseSensor):
+    _attr_icon = "mdi:fan"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(self, coordinator, name: str, entry_id: str, device_type: str) -> None:
+        super().__init__(coordinator, name, entry_id, device_type)
+        self._attr_name = "Fan B"
+        self._attr_unique_id = f"{entry_id}_s1_fan_b"
+
+    @property
+    def native_value(self) -> Any:
+        if self._unavailable():
+            return None
+        return self._data().get("fan_b")
+
+
+_PURIFIER_DEFAULT_MODEL = "xTool AP2"
+
+
+class S1PurifierModelSensor(_BaseSensor):
+    _attr_icon = "mdi:air-purifier"
+
+    def __init__(self, coordinator, name: str, entry_id: str, device_type: str) -> None:
+        super().__init__(coordinator, name, entry_id, device_type)
+        self._attr_name = "Air Cleaner Model"
+        self._attr_unique_id = f"{entry_id}_s1_purifier_model"
+
+    @property
+    def native_value(self) -> str:
+        # Use embedded ID if the device reports one, otherwise fall back to known model
+        return self._data().get("purifier_model") or _PURIFIER_DEFAULT_MODEL
+
+
+class S1PurifierSpeedSensor(_BaseSensor):
+    _attr_icon = "mdi:air-purifier"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(self, coordinator, name: str, entry_id: str, device_type: str) -> None:
+        super().__init__(coordinator, name, entry_id, device_type)
+        self._attr_name = "Air Cleaner Speed"
+        self._attr_unique_id = f"{entry_id}_s1_purifier_speed"
+
+    @property
+    def available(self) -> bool:
+        if self._unavailable():
+            return False
+        return self._data().get("purifier_speed") is not None
+
+    @property
+    def native_value(self) -> Any:
+        return self._data().get("purifier_speed")
+
+
+class S1PurifierHumiditySensor(_BaseSensor):
+    _attr_icon = "mdi:water-percent"
+    _attr_native_unit_of_measurement = PERCENTAGE
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(self, coordinator, name: str, entry_id: str, device_type: str) -> None:
+        super().__init__(coordinator, name, entry_id, device_type)
+        self._attr_name = "Air Cleaner Humidity"
+        self._attr_unique_id = f"{entry_id}_s1_purifier_humidity"
+
+    @property
+    def available(self) -> bool:
+        if self._unavailable():
+            return False
+        return self._data().get("purifier_humidity") is not None
+
+    @property
+    def native_value(self) -> Any:
+        return self._data().get("purifier_humidity")

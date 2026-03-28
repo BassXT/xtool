@@ -12,6 +12,7 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .coordinator_d1 import XToolD1Coordinator
+from .coordinator_s1 import XToolS1Coordinator
 from .const import (
     DOMAIN,
     PLATFORMS,
@@ -483,6 +484,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     if dev_type == "d1":
         coordinator: DataUpdateCoordinator = XToolD1Coordinator(hass, ip)
+        await coordinator.async_config_entry_first_refresh()
+    elif dev_type == "s1":
+        coordinator = XToolS1Coordinator(hass, ip)
         await coordinator.async_config_entry_first_refresh()
     else:
         coordinator = XToolCoordinator(hass, ip, dev_type)

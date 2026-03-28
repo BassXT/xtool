@@ -17,6 +17,7 @@ SUPPORTED_DEVICE_TYPES: dict[str, str] = {
     "F2 Ultra UV": "f2uuv",
     "M1": "m1",
     "M1 Ultra": "m1u",
+    "S1": "s1",
     "D1": "d1",
     "Apparel Printer": "apparel"
 }
