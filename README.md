@@ -173,30 +173,67 @@ mode: single
 
 ### 🔹 4. Notify when Laser3 (S1) AP2 filter needs replacing
 ```yaml
-alias: Laser3 – AP2 Filter Low
-description: Send a notification when any AP2 air cleaner filter drops below 10%
-triggers:
-  - trigger: numeric_state
+# NOTE: Adjust entity ID prefixes to match your device name from integration setup.
+# Check Settings -> Devices -> your S1 device to confirm exact entity IDs.
+alias: xTool AP2 - Filter Replacement Warning
+description: >
+  Persistent notification when any AP2 filter drops below 25% remaining.
+  Critical alert when below 15%.
+
+trigger:
+  - platform: numeric_state
     entity_id: sensor.laser3_s1_pre_filter_remaining
-    below: 10
-  - trigger: numeric_state
+    below: 25
+    id: pre_filter
+    variables:
+      filter_name: "Pre-filter"
+
+  - platform: numeric_state
     entity_id: sensor.laser3_s1_medium_efficiency_filter_remaining
-    below: 10
-  - trigger: numeric_state
+    below: 25
+    id: medium_filter
+    variables:
+      filter_name: "Medium Efficiency Filter"
+
+  - platform: numeric_state
     entity_id: sensor.laser3_s1_activated_carbon_filter_remaining
-    below: 10
-  - trigger: numeric_state
+    below: 25
+    id: carbon_filter
+    variables:
+      filter_name: "Activated Carbon Filter"
+
+  - platform: numeric_state
     entity_id: sensor.laser3_s1_ultra_dense_carbon_mesh_filter_remaining
-    below: 10
-  - trigger: numeric_state
+    below: 25
+    id: dense_carbon_filter
+    variables:
+      filter_name: "Ultra Dense Carbon Mesh Filter"
+
+  - platform: numeric_state
     entity_id: sensor.laser3_s1_high_efficiency_filter_remaining
-    below: 10
-actions:
-  - service: notify.mobile_app_my_phone
+    below: 25
+    id: hepa_filter
+    variables:
+      filter_name: "High Efficiency Filter"
+
+action:
+  - service: persistent_notification.create
     data:
-      title: "xTool Laser3 – AP2 Filter Low"
-      message: "An AP2 air cleaner filter is below 10%. Check the filter status and replace if needed."
-mode: single
+      notification_id: "ap2_filter_{{ trigger.id }}"
+      title: >
+        {% if trigger.to_state.state | float < 15 %}
+          Critical: AP2 Filter Replacement Required
+        {% else %}
+          AP2 Filter Replacement Warning
+        {% endif %}
+      message: >
+        {% if trigger.to_state.state | float < 15 %}
+          Critical:
+        {% endif %}
+        {{ filter_name }} is at {{ trigger.to_state.state }}% remaining.
+
+mode: parallel
+max: 5
 ```
 
 ### 🔹 5. Play an audio notification when Laser1 finishes
