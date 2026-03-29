@@ -171,7 +171,35 @@ action:
 mode: single
 ```
 
-### 🔹 4. Play an audio notification when Laser1 finishes
+### 🔹 4. Notify when Laser3 (S1) AP2 filter needs replacing
+```yaml
+alias: Laser3 – AP2 Filter Low
+description: Send a notification when any AP2 air cleaner filter drops below 10%
+triggers:
+  - trigger: numeric_state
+    entity_id: sensor.laser3_s1_pre_filter_remaining
+    below: 10
+  - trigger: numeric_state
+    entity_id: sensor.laser3_s1_medium_efficiency_filter_remaining
+    below: 10
+  - trigger: numeric_state
+    entity_id: sensor.laser3_s1_activated_carbon_filter_remaining
+    below: 10
+  - trigger: numeric_state
+    entity_id: sensor.laser3_s1_ultra_dense_carbon_mesh_filter_remaining
+    below: 10
+  - trigger: numeric_state
+    entity_id: sensor.laser3_s1_high_efficiency_filter_remaining
+    below: 10
+actions:
+  - service: notify.mobile_app_my_phone
+    data:
+      title: "xTool Laser3 – AP2 Filter Low"
+      message: "An AP2 air cleaner filter is below 10%. Check the filter status and replace if needed."
+mode: single
+```
+
+### 🔹 5. Play an audio notification when Laser1 finishes
 ```yaml
 alias: Laser1 – Audio Notification
 description: Play a short audio clip when Laser1 (F1) completes a job
