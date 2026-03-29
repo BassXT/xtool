@@ -31,7 +31,7 @@ _WORK_STATE_MAP = {
 class XToolS1Coordinator(DataUpdateCoordinator[dict[str, Any]]):
     """Coordinator for the xTool S1 (WebSocket protocol on port 8081)."""
 
-    def __init__(self, hass: HomeAssistant, ip_address: str) -> None:
+    def __init__(self, hass: HomeAssistant, ip_address: str, has_ap2: bool = False) -> None:
         super().__init__(
             hass,
             _LOGGER,
@@ -39,6 +39,7 @@ class XToolS1Coordinator(DataUpdateCoordinator[dict[str, Any]]):
             update_interval=timedelta(seconds=DEFAULT_UPDATE_INTERVAL),
         )
         self.ip_address = ip_address
+        self.has_ap2 = has_ap2
         self.api = XToolS1Api(ip_address, async_get_clientsession(hass))
 
         # Cache static fields so they survive a bad poll tick
@@ -57,9 +58,10 @@ class XToolS1Coordinator(DataUpdateCoordinator[dict[str, Any]]):
             ok = await self.api.connect()
             if not ok:
                 raise UpdateFailed(f"Cannot connect to S1 at {self.ip_address}:8081")
-            # Request full status dump and air cleaner state, wait briefly for pushes
+            # Request full status dump, then air cleaner state if AP2 is present
             await self.api.request_status()
-            await self.api.request_purifier_status()
+            if self.has_ap2:
+                await self.api.request_purifier_status()
             await asyncio.sleep(_INITIAL_WAIT)
 
         # Send keepalive / position refresh

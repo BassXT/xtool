@@ -9,7 +9,7 @@ from homeassistant.const import UnitOfTemperature, UnitOfTime, PERCENTAGE
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, MANUFACTURER
+from .const import DOMAIN, MANUFACTURER, CONF_HAS_AP2
 from .coordinator_s1 import XToolS1Coordinator
 
 
@@ -50,17 +50,22 @@ async def async_setup_entry(
                 S1PositionYSensor(coordinator, name, entry_id, device_type),
                 S1FanASensor(coordinator, name, entry_id, device_type),
                 S1FanBSensor(coordinator, name, entry_id, device_type),
-                S1PurifierModelSensor(coordinator, name, entry_id, device_type),
-                S1PurifierSpeedSensor(coordinator, name, entry_id, device_type),
-                S1PurifierSensorDSensor(coordinator, name, entry_id, device_type),
-                S1PurifierSensorSSensor(coordinator, name, entry_id, device_type),
-                S1FilterPreSensor(coordinator, name, entry_id, device_type),
-                S1FilterMediumSensor(coordinator, name, entry_id, device_type),
-                S1FilterCarbonSensor(coordinator, name, entry_id, device_type),
-                S1FilterDenseCarbonSensor(coordinator, name, entry_id, device_type),
-                S1FilterHepaSensor(coordinator, name, entry_id, device_type),
             ]
         )
+        if entry.data.get(CONF_HAS_AP2, False):
+            entities.extend(
+                [
+                    S1PurifierModelSensor(coordinator, name, entry_id, device_type),
+                    S1PurifierSpeedSensor(coordinator, name, entry_id, device_type),
+                    S1PurifierSensorDSensor(coordinator, name, entry_id, device_type),
+                    S1PurifierSensorSSensor(coordinator, name, entry_id, device_type),
+                    S1FilterPreSensor(coordinator, name, entry_id, device_type),
+                    S1FilterMediumSensor(coordinator, name, entry_id, device_type),
+                    S1FilterCarbonSensor(coordinator, name, entry_id, device_type),
+                    S1FilterDenseCarbonSensor(coordinator, name, entry_id, device_type),
+                    S1FilterHepaSensor(coordinator, name, entry_id, device_type),
+                ]
+            )
         async_add_entities(entities, True)
         return
 

@@ -18,6 +18,7 @@ from .const import (
     PLATFORMS,
     CONF_IP_ADDRESS,
     CONF_DEVICE_TYPE,
+    CONF_HAS_AP2,
     DEFAULT_UPDATE_INTERVAL,
     DEFAULT_SLOW_UPDATE_INTERVAL,
     HTTP_TIMEOUT,
@@ -486,7 +487,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         coordinator: DataUpdateCoordinator = XToolD1Coordinator(hass, ip)
         await coordinator.async_config_entry_first_refresh()
     elif dev_type == "s1":
-        coordinator = XToolS1Coordinator(hass, ip)
+        has_ap2 = entry.data.get(CONF_HAS_AP2, False)
+        coordinator = XToolS1Coordinator(hass, ip, has_ap2=has_ap2)
         await coordinator.async_config_entry_first_refresh()
     else:
         coordinator = XToolCoordinator(hass, ip, dev_type)
