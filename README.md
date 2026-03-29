@@ -59,18 +59,49 @@ Entity IDs are automatically generated using the **Name** and **Device Type** yo
 | Name: `Laser1`, Type: `F1` | `binary_sensor.laser1_f1_power`<br>`sensor.laser1_f1_status` |
 | Name: `Laser2`, Type: `P2` | `binary_sensor.laser2_p2_power`<br>`sensor.laser2_p2_status` |
 | Name: `Studio`, Type: `M1` | `sensor.studio_m1_status`<br>`sensor.studio_m1_cpu_temp`<br>`sensor.studio_m1_water_temp`<br>`sensor.studio_m1_purifier` |
+| Name: `Laser3`, Type: `S1` | `binary_sensor.laser3_s1_power`<br>`binary_sensor.laser3_s1_running`<br>`binary_sensor.laser3_s1_alarm`<br>`sensor.laser3_s1_status`<br>`sensor.laser3_s1_firmware_version`<br>`sensor.laser3_s1_job_file`<br>`sensor.laser3_s1_position_x`<br>`sensor.laser3_s1_position_y`<br>`sensor.laser3_s1_fan_a`<br>`sensor.laser3_s1_fan_b` |
+
+**S1 with AP2 Air Cleaner** adds these additional entities (using the same name prefix):
+
+| Entity | Description |
+|--------|-------------|
+| `binary_sensor.laser3_s1_air_cleaner` | Air cleaner running state |
+| `sensor.laser3_s1_air_cleaner_model` | Air cleaner model |
+| `sensor.laser3_s1_air_cleaner_speed` | Fan speed |
+| `sensor.laser3_s1_air_cleaner_sensor_d` | Particle sensor D reading |
+| `sensor.laser3_s1_air_cleaner_sensor_s` | Particle sensor S reading |
+| `sensor.laser3_s1_pre_filter_remaining` | Pre-filter life remaining (%) |
+| `sensor.laser3_s1_medium_efficiency_filter_remaining` | Medium efficiency filter life remaining (%) |
+| `sensor.laser3_s1_activated_carbon_filter_remaining` | Activated carbon filter life remaining (%) |
+| `sensor.laser3_s1_ultra_dense_carbon_mesh_filter_remaining` | Ultra dense carbon mesh filter life remaining (%) |
+| `sensor.laser3_s1_high_efficiency_filter_remaining` | High efficiency filter life remaining (%) |
 
 ---
 
 ## 💬 Possible Status Values
 
+### P2, F1, M1, D1
+
 | Status | Meaning |
-|---------|----------|
+|--------|---------|
 | `Running` | The laser is currently engraving |
 | `Done` | The engraving job is finished |
 | `Idle` | The machine is idle |
 | `Sleep` | The device is in sleep mode |
 | `Ready` | (M1 only) machine ready for work |
+| `Unavailable` | Device offline or unreachable |
+| `Unknown` | Unknown or invalid response |
+
+### S1
+
+| Status | Meaning |
+|--------|---------|
+| `Ready` | Machine ready for work |
+| `Measuring` | Running auto-focus or measurement pass |
+| `Starting` | Job is initializing |
+| `Running` | The laser is currently engraving |
+| `Finishing` | Job is wrapping up |
+| `Idle` | The machine is idle |
 | `Unavailable` | Device offline or unreachable |
 | `Unknown` | Unknown or invalid response |
 
