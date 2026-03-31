@@ -9,5 +9,5 @@
   "issue_tracker": "https://github.com/BassXT/xtool/issues",
   "loggers": ["custom_components.xtool"],
   "requirements": ["requests"],
-  "version": "2.3.1"
+  "version": "2.4.0"
 }
