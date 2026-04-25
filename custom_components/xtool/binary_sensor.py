@@ -29,6 +29,18 @@ async def async_setup_entry(
     d = coordinator.data or {}
     entities: list[BinarySensorEntity] = []
 
+    if device_type == "s1":
+        entities.extend(
+            [
+                S1PowerBinarySensor(coordinator, name, entry_id, device_type),
+                S1RunningBinarySensor(coordinator, name, entry_id, device_type),
+                S1AlarmBinarySensor(coordinator, name, entry_id, device_type),
+                S1PurifierRunningBinarySensor(coordinator, name, entry_id, device_type),
+            ]
+        )
+        async_add_entities(entities, True)
+        return
+
     if device_type == "d1":
         entities.extend(
             [
@@ -147,6 +159,73 @@ class _BaseBinary(CoordinatorEntity, BinarySensorEntity):
 
     def _unavailable(self) -> bool:
         return bool(self._data().get("_unavailable"))
+
+
+# --- S1 ---
+class S1PowerBinarySensor(_BaseBinary):
+    _attr_device_class = BinarySensorDeviceClass.POWER
+
+    def __init__(self, coordinator, name: str, entry_id: str, device_type: str) -> None:
+        super().__init__(coordinator, name, entry_id, device_type)
+        self._attr_name = "Power"
+        self._attr_unique_id = f"{entry_id}_s1_power"
+
+    @property
+    def is_on(self) -> bool:
+        return (not self._unavailable()) and bool(self.coordinator.last_update_success)
+
+
+class S1RunningBinarySensor(_BaseBinary):
+    _attr_device_class = BinarySensorDeviceClass.RUNNING
+
+    def __init__(self, coordinator, name: str, entry_id: str, device_type: str) -> None:
+        super().__init__(coordinator, name, entry_id, device_type)
+        self._attr_name = "Running"
+        self._attr_unique_id = f"{entry_id}_s1_running"
+
+    @property
+    def is_on(self) -> bool:
+        # S13=Starting, S14=Running, S19=Finishing are all "active" states
+        return self._data().get("work_state_raw") in ("S13", "S14", "S19")
+
+
+class S1AlarmBinarySensor(_BaseBinary):
+    _attr_device_class = BinarySensorDeviceClass.PROBLEM
+
+    def __init__(self, coordinator, name: str, entry_id: str, device_type: str) -> None:
+        super().__init__(coordinator, name, entry_id, device_type)
+        self._attr_name = "Alarm"
+        self._attr_unique_id = f"{entry_id}_s1_alarm"
+
+    @property
+    def available(self) -> bool:
+        return self.coordinator.last_update_success and not self._unavailable()
+
+    @property
+    def is_on(self) -> bool:
+        return self._data().get("alarm_present") is True
+
+
+class S1PurifierRunningBinarySensor(_BaseBinary):
+    _attr_device_class = BinarySensorDeviceClass.RUNNING
+    _attr_icon = "mdi:air-purifier"
+
+    def __init__(self, coordinator, name: str, entry_id: str, device_type: str) -> None:
+        super().__init__(coordinator, name, entry_id, device_type)
+        self._attr_name = "Air Cleaner"
+        self._attr_unique_id = f"{entry_id}_s1_purifier_running"
+
+    @property
+    def available(self) -> bool:
+        return (
+            self.coordinator.last_update_success
+            and not self._unavailable()
+            and self._data().get("purifier_on") is not None
+        )
+
+    @property
+    def is_on(self) -> bool:
+        return bool(self._data().get("purifier_on"))
 
 
 # --- D1 ---

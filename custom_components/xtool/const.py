@@ -6,6 +6,7 @@ PLATFORMS: list[str] = ["sensor", "binary_sensor", "camera", "switch", "button"]
 
 CONF_IP_ADDRESS = "ip_address"
 CONF_DEVICE_TYPE = "device_type"
+CONF_HAS_AP2 = "has_ap2"  # Whether the S1 has an AP2 air cleaner attached
 
 # Mapping of display names to internal device type codes
 SUPPORTED_DEVICE_TYPES: dict[str, str] = {
@@ -17,6 +18,7 @@ SUPPORTED_DEVICE_TYPES: dict[str, str] = {
     "F2 Ultra UV": "f2uuv",
     "M1": "m1",
     "M1 Ultra": "m1u",
+    "S1": "s1",
     "D1": "d1",
     "Apparel Printer": "apparel"
 }

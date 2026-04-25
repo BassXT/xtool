@@ -25,8 +25,8 @@ async def async_setup_entry(
 
     entities: list[SwitchEntity] = []
 
-    # D1 has its own API stack -> no v2 peripheral switches here
-    if device_type == "d1":
+    # D1 and S1 have their own API stacks -> no v2 peripheral switches here
+    if device_type in ("d1", "s1"):
         async_add_entities(entities, True)
         return
 

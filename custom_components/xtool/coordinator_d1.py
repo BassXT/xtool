@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
+import logging
 from typing import Any
 
 from homeassistant.core import HomeAssistant
@@ -10,11 +11,14 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from .api_d1 import XToolD1Api
 from .const import DEFAULT_UPDATE_INTERVAL
 
+_LOGGER = logging.getLogger(__name__)
+
 
 class XToolD1Coordinator(DataUpdateCoordinator[dict[str, Any]]):
     def __init__(self, hass: HomeAssistant, ip_address: str) -> None:
         super().__init__(
             hass,
+            _LOGGER,
             name=f"xtool_d1_{ip_address}",
             update_interval=timedelta(seconds=DEFAULT_UPDATE_INTERVAL),
         )
