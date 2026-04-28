@@ -45,7 +45,6 @@ async def async_setup_entry(
                     "flame_alarm_enabled",
                     "Flame Alarm",
                     None,
-                    invert=True,
                 ),
                 XToolF1V2ConfigBinarySensor(
                     coordinator,
