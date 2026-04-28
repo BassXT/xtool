@@ -80,18 +80,23 @@ class XToolF1V2Coordinator(DataUpdateCoordinator[dict[str, Any]]):
                 _LOGGER.debug("F1 V2 websocket disconnected: %s", err)
 
             self._handle_disconnect()
-            await asyncio.sleep(3)
+            await asyncio.sleep(10)
 
     def _handle_disconnect(self) -> None:
-        """Handle websocket disconnect without turning sleep into unavailable."""
+        """Handle websocket disconnect without treating sleep as unavailable.
+
+        The F1 V2 can close/refuse the websocket while sleeping. That is not the
+        same as the machine being unavailable. Keep the last known machine status
+        and only mark unavailable if we never received a valid state before.
+        """
         self._state["connection_state"] = "disconnected"
+        self._state["running"] = False
 
         if self._is_sleep_state():
-            self._state["_unavailable"] = False
             self._set_status("sleep", self._state.get("work_state_raw") or "P_SLEEP")
-        else:
-            self._state["_unavailable"] = True
-            self._state["running"] = False
+
+        has_valid_state = self._state.get("status") not in (None, "unknown")
+        self._state["_unavailable"] = not has_valid_state
 
         self.async_set_updated_data(dict(self._state))
 
@@ -139,7 +144,10 @@ class XToolF1V2Coordinator(DataUpdateCoordinator[dict[str, Any]]):
                                 event = json.loads(msg.data)
                                 self._handle_event(event)
                             except Exception:
-                                _LOGGER.debug("Unable to parse F1 V2 text websocket message", exc_info=True)
+                                _LOGGER.debug(
+                                    "Unable to parse F1 V2 text websocket message",
+                                    exc_info=True,
+                                )
 
                         elif msg.type in (
                             aiohttp.WSMsgType.CLOSED,
@@ -173,7 +181,12 @@ class XToolF1V2Coordinator(DataUpdateCoordinator[dict[str, Any]]):
     def _set_status(self, status: str, raw: str | None = None) -> None:
         self._state["status"] = status
         self._state["work_state_raw"] = raw or status
-        self._state["running"] = status in {"framing", "prepared", "ready", "working"}
+        self._state["running"] = status in {
+            "framing",
+            "prepared",
+            "ready",
+            "working",
+        }
 
     def _handle_event(self, event: dict[str, Any]) -> None:
         url = event.get("url")
@@ -191,7 +204,12 @@ class XToolF1V2Coordinator(DataUpdateCoordinator[dict[str, Any]]):
 
                 if mode == "P_SLEEP":
                     self._set_status("sleep", mode)
-                elif mode in {"P_WORK", "P_ONLINE_READY_WORK", "P_OFFLINE_READY_WORK", "P_READY"}:
+                elif mode in {
+                    "P_WORK",
+                    "P_ONLINE_READY_WORK",
+                    "P_OFFLINE_READY_WORK",
+                    "P_READY",
+                }:
                     self._set_status("ready", mode)
                 elif mode == "P_WORKING":
                     self._set_status("working", mode)
@@ -250,7 +268,9 @@ class XToolF1V2Coordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self._state["beep_enabled"] = info.get("beepEnable")
                 self._state["gap_check_enabled"] = info.get("gapCheck")
                 self._state["gap_check_with_key_enabled"] = info.get("gapCheckWithKey")
-                self._state["machine_lock_check_enabled"] = info.get("machineLockCheck")
+                self._state["machine_lock_check_enabled"] = info.get(
+                    "machineLockCheck"
+                )
                 self._state["purifier_timeout"] = info.get("purifierTimeout")
                 self._state["working_mode"] = info.get("workingMode")
                 changed = True
