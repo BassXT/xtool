@@ -4,7 +4,6 @@ import asyncio
 from datetime import timedelta
 import json
 import logging
-import os
 import ssl
 import time
 from typing import Any
@@ -18,8 +17,10 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 _LOGGER = logging.getLogger(__name__)
 
 XTOOL_WS_PORT = 28900
-XTOOL_WS_HANDSHAKE = "bWFrZWJsb2NrLXh0b29s"  # base64: makeblock-xtools
+XTOOL_WS_HANDSHAKE = "bWFrZWJsb2NrLXh0b29s"
 XTOOL_WS_PING = b"\xC0\x00"
+
+VALID_SLEEP_RAW_STATES = {"P_SLEEP", "SLEEP"}
 
 
 class XToolF1V2Coordinator(DataUpdateCoordinator[dict[str, Any]]):
@@ -36,8 +37,10 @@ class XToolF1V2Coordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.device_type = "f1_v2"
         self._task: asyncio.Task | None = None
         self._stop_event = asyncio.Event()
+
         self._state: dict[str, Any] = {
             "_unavailable": True,
+            "connection_state": "disconnected",
             "work_state_raw": None,
             "status": "unknown",
             "lid_open": None,
@@ -47,6 +50,7 @@ class XToolF1V2Coordinator(DataUpdateCoordinator[dict[str, Any]]):
             "button_last": None,
             "last_result": None,
             "last_job_time": None,
+            "task_id": None,
             "config": {},
         }
 
@@ -74,9 +78,27 @@ class XToolF1V2Coordinator(DataUpdateCoordinator[dict[str, Any]]):
                 raise
             except Exception as err:
                 _LOGGER.debug("F1 V2 websocket disconnected: %s", err)
-                self._state["_unavailable"] = True
-                self.async_set_updated_data(dict(self._state))
-                await asyncio.sleep(3)
+
+            self._handle_disconnect()
+            await asyncio.sleep(3)
+
+    def _handle_disconnect(self) -> None:
+        """Handle websocket disconnect without turning sleep into unavailable."""
+        self._state["connection_state"] = "disconnected"
+
+        if self._is_sleep_state():
+            self._state["_unavailable"] = False
+            self._set_status("sleep", self._state.get("work_state_raw") or "P_SLEEP")
+        else:
+            self._state["_unavailable"] = True
+            self._state["running"] = False
+
+        self.async_set_updated_data(dict(self._state))
+
+    def _is_sleep_state(self) -> bool:
+        status = str(self._state.get("status") or "").lower()
+        raw = str(self._state.get("work_state_raw") or "").upper()
+        return status == "sleep" or raw in VALID_SLEEP_RAW_STATES
 
     async def _listen_once(self) -> None:
         url = (
@@ -98,6 +120,7 @@ class XToolF1V2Coordinator(DataUpdateCoordinator[dict[str, Any]]):
                 max_msg_size=0,
             ) as ws:
                 self._state["_unavailable"] = False
+                self._state["connection_state"] = "connected"
                 self.async_set_updated_data(dict(self._state))
 
                 await ws.send_str(XTOOL_WS_HANDSHAKE)
@@ -110,12 +133,14 @@ class XToolF1V2Coordinator(DataUpdateCoordinator[dict[str, Any]]):
                             event = self._parse_frame(msg.data)
                             if event:
                                 self._handle_event(event)
+
                         elif msg.type == aiohttp.WSMsgType.TEXT:
                             try:
                                 event = json.loads(msg.data)
                                 self._handle_event(event)
                             except Exception:
-                                pass
+                                _LOGGER.debug("Unable to parse F1 V2 text websocket message", exc_info=True)
+
                         elif msg.type in (
                             aiohttp.WSMsgType.CLOSED,
                             aiohttp.WSMsgType.ERROR,
@@ -124,6 +149,10 @@ class XToolF1V2Coordinator(DataUpdateCoordinator[dict[str, Any]]):
                             break
                 finally:
                     ping_task.cancel()
+                    try:
+                        await ping_task
+                    except asyncio.CancelledError:
+                        pass
 
     async def _heartbeat(self, ws: aiohttp.ClientWebSocketResponse) -> None:
         while not self._stop_event.is_set():
@@ -134,20 +163,22 @@ class XToolF1V2Coordinator(DataUpdateCoordinator[dict[str, Any]]):
         idx = raw.find(b"{")
         if idx == -1:
             return None
+
         try:
             return json.loads(raw[idx:].decode("utf-8"))
         except Exception:
+            _LOGGER.debug("Unable to parse F1 V2 binary websocket frame", exc_info=True)
             return None
 
     def _set_status(self, status: str, raw: str | None = None) -> None:
         self._state["status"] = status
         self._state["work_state_raw"] = raw or status
-        self._state["running"] = status in {"framing", "ready", "working"}
+        self._state["running"] = status in {"framing", "prepared", "ready", "working"}
 
     def _handle_event(self, event: dict[str, Any]) -> None:
         url = event.get("url")
-        method = event.get("method")
         data = event.get("data") if isinstance(event.get("data"), dict) else {}
+
         module = data.get("module")
         typ = data.get("type")
         info = data.get("info")
@@ -157,14 +188,22 @@ class XToolF1V2Coordinator(DataUpdateCoordinator[dict[str, Any]]):
         if url == "/work/mode" and module == "STATUS_CONTROLLER" and typ == "MODE_CHANGE":
             if isinstance(info, dict):
                 mode = str(info.get("mode", "")).upper()
+
                 if mode == "P_SLEEP":
-                    self._set_status("sleeping", mode)
-                elif mode == "P_WORK":
+                    self._set_status("sleep", mode)
+                elif mode in {"P_WORK", "P_ONLINE_READY_WORK", "P_OFFLINE_READY_WORK", "P_READY"}:
                     self._set_status("ready", mode)
                 elif mode == "P_WORKING":
                     self._set_status("working", mode)
                 elif mode in {"P_IDLE", "IDLE"}:
                     self._set_status("idle", mode)
+                elif mode in {"P_WORK_DONE", "P_FINISH"}:
+                    self._set_status("finished", mode)
+                elif mode == "P_ERROR":
+                    self._set_status("error", mode)
+                else:
+                    self._set_status("unknown", mode)
+
                 changed = True
 
         elif url == "/device/status" and module == "STATUS_CONTROLLER":
@@ -172,9 +211,11 @@ class XToolF1V2Coordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             if typ == "WORK_PREPARED":
                 if info_str == "framing":
-                    self._set_status("framing_prepared", "WORK_PREPARED")
+                    self._set_status("framing", "WORK_PREPARED")
                 elif info_str == "working":
-                    self._set_status("ready", "WORK_PREPARED")
+                    self._set_status("prepared", "WORK_PREPARED")
+                else:
+                    self._set_status("prepared", "WORK_PREPARED")
                 changed = True
 
             elif typ == "WORK_STARTED":
@@ -182,12 +223,16 @@ class XToolF1V2Coordinator(DataUpdateCoordinator[dict[str, Any]]):
                     self._set_status("framing", "WORK_STARTED")
                 elif info_str == "working":
                     self._set_status("working", "WORK_STARTED")
+                else:
+                    self._set_status("working", "WORK_STARTED")
                 changed = True
 
             elif typ == "WORK_FINISHED":
                 if info_str == "framing":
                     self._set_status("idle", "WORK_FINISHED")
                 elif info_str == "working":
+                    self._set_status("finished", "WORK_FINISHED")
+                else:
                     self._set_status("finished", "WORK_FINISHED")
                 changed = True
 
@@ -236,4 +281,5 @@ class XToolF1V2Coordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         if changed:
             self._state["_unavailable"] = False
+            self._state["connection_state"] = "connected"
             self.async_set_updated_data(dict(self._state))
