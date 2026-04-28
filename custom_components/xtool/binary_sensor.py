@@ -328,9 +328,12 @@ class XToolRunningBinarySensor(_BaseBinary):
 
     @property
     def is_on(self) -> bool:
+        status = str(self._data().get("status") or "").lower()
+        if status in {"framing", "framing_prepared", "ready", "working"}:
+            return True
+
         raw = str(self._data().get("work_state_raw") or "").upper()
         return raw in {"WORK", "P_WORKING", "P_WORK", "P_MEASURE"}
-
 
 class XToolLidOpenBinarySensor(_BaseBinary):
     _attr_device_class = BinarySensorDeviceClass.OPENING
