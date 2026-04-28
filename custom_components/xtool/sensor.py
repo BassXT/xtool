@@ -31,10 +31,8 @@ async def async_setup_entry(
         entities.extend(
             [
                 XToolF1V2StatusSensor(coordinator, name, entry_id, device_type),
-                XToolF1V2WorkingModeSensor(coordinator, name, entry_id, device_type),
                 XToolF1V2LastResultSensor(coordinator, name, entry_id, device_type),
                 XToolF1V2LastJobTimeSensor(coordinator, name, entry_id, device_type),
-                XToolF1V2PurifierTimeoutSensor(coordinator, name, entry_id, device_type),
             ]
         )
         async_add_entities(entities, True)
@@ -165,7 +163,23 @@ class XToolF1V2StatusSensor(_BaseSensor):
     def native_value(self):
         if self._unavailable():
             return "Unavailable"
-        return self._data().get("status") or "unknown"
+
+        status = str(self._data().get("status") or "unknown").strip().lower()
+
+        mapping = {
+            "idle": "Idle",
+            "framing": "Framing",
+            "prepared": "Prepared",
+            "ready": "Ready",
+            "working": "Working",
+            "finished": "Finished",
+            "sleep": "Sleep",
+            "sleeping": "Sleep",
+            "error": "Error",
+            "unknown": "Unknown",
+        }
+
+        return mapping.get(status, status.capitalize())
 
 
 class XToolF1V2WorkingModeSensor(_BaseSensor):
