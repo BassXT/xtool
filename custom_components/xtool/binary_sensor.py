@@ -30,61 +30,52 @@ async def async_setup_entry(
     entities: list[BinarySensorEntity] = []
 
     if device_type == "f1_v2":
-        entities.extend(
-            [
-                XToolPowerBinarySensor(coordinator, name, entry_id, device_type),
-                XToolAlarmBinarySensor(coordinator, name, entry_id, device_type),
-                XToolRunningBinarySensor(coordinator, name, entry_id, device_type),
-                XToolLidOpenBinarySensor(coordinator, name, entry_id, device_type),
-                XToolMachineLockBinarySensor(coordinator, name, entry_id, device_type),
-                XToolF1V2ConfigBinarySensor(
-                    coordinator,
-                    name,
-                    entry_id,
-                    device_type,
-                    "flame_alarm_enabled",
-                    "Flame Alarm",
-                    BinarySensorDeviceClass.SAFETY,
-                ),
-                XToolF1V2ConfigBinarySensor(
-                    coordinator,
-                    name,
-                    entry_id,
-                    device_type,
-                    "beep_enabled",
-                    "Buzzer",
-                    None,
-                ),
-                XToolF1V2ConfigBinarySensor(
-                    coordinator,
-                    name,
-                    entry_id,
-                    device_type,
-                    "gap_check_enabled",
-                    "Gap Check",
-                    BinarySensorDeviceClass.SAFETY,
-                ),
-                XToolF1V2ConfigBinarySensor(
-                    coordinator,
-                    name,
-                    entry_id,
-                    device_type,
-                    "gap_check_with_key_enabled",
-                    "Gap Check With Key",
-                    BinarySensorDeviceClass.SAFETY,
-                ),
-                XToolF1V2ConfigBinarySensor(
-                    coordinator,
-                    name,
-                    entry_id,
-                    device_type,
-                    "machine_lock_check_enabled",
-                    "Machine Lock Check",
-                    BinarySensorDeviceClass.LOCK,
-                ),
-            ]
-        )
-        async_add_entities(entities, True)
+    entities.extend(
+        [
+            XToolPowerBinarySensor(coordinator, name, entry_id, device_type),
+            XToolProblemBinarySensor(coordinator, name, entry_id, device_type),
+            XToolRunningBinarySensor(coordinator, name, entry_id, device_type),
+            XToolLidOpenBinarySensor(coordinator, name, entry_id, device_type),
+            XToolMachineLockBinarySensor(coordinator, name, entry_id, device_type),
+            XToolF1V2ConfigBinarySensor(
+                coordinator,
+                name,
+                entry_id,
+                device_type,
+                "flame_alarm_enabled",
+                "Flame Alarm",
+                BinarySensorDeviceClass.SAFETY,
+                invert=True,
+            ),
+            XToolF1V2ConfigBinarySensor(
+                coordinator,
+                name,
+                entry_id,
+                device_type,
+                "beep_enabled",
+                "Buzzer Reminder",
+                None,
+            ),
+            XToolF1V2ConfigBinarySensor(
+                coordinator,
+                name,
+                entry_id,
+                device_type,
+                "gap_check_enabled",
+                "Stop when lid opened",
+                BinarySensorDeviceClass.SAFETY,
+                invert=True,
+            ),
+            XToolF1V2WorkingModeBinarySensor(
+                coordinator,
+                name,
+                entry_id,
+                device_type,
+            ),
+        ]
+    )
+    async_add_entities(entities, True)
+    returnies(entities, True)
         return
         
     if device_type == "s1":
@@ -228,9 +219,11 @@ class XToolF1V2ConfigBinarySensor(_BaseBinary):
         key: str,
         label: str,
         device_class: BinarySensorDeviceClass | None,
+        invert: bool = False,
     ) -> None:
         super().__init__(coordinator, name, entry_id, device_type)
         self._key = key
+        self._invert = invert
         self._attr_name = label
         self._attr_unique_id = f"{entry_id}_f1_v2_{key}"
         self._attr_device_class = device_class
@@ -243,7 +236,54 @@ class XToolF1V2ConfigBinarySensor(_BaseBinary):
 
     @property
     def is_on(self) -> bool:
-        return bool(self._data().get(self._key))
+        value = bool(self._data().get(self._key))
+        return not value if self._invert else value
+
+class XToolProblemBinarySensor(_BaseBinary):
+    _attr_device_class = BinarySensorDeviceClass.PROBLEM
+
+    def __init__(self, coordinator, name: str, entry_id: str, device_type: str) -> None:
+        super().__init__(coordinator, name, entry_id, device_type)
+        self._attr_name = "Problem"
+        self._attr_unique_id = f"{entry_id}_problem"
+
+    @property
+    def available(self) -> bool:
+        return not self._unavailable()
+
+    @property
+    def is_on(self) -> bool:
+        return bool(self._data().get("alarm_present"))
+
+class XToolF1V2WorkingModeBinarySensor(_BaseBinary):
+    _attr_icon = "mdi:motion-sensor"
+
+    def __init__(self, coordinator, name: str, entry_id: str, device_type: str) -> None:
+        super().__init__(coordinator, name, entry_id, device_type)
+        self._attr_name = "Stop when moved"
+        self._attr_unique_id = f"{entry_id}_f1_v2_stop_when_moved"
+
+    @property
+    def available(self) -> bool:
+        if self._unavailable():
+            return False
+        return self._data().get("working_mode") is not None
+
+    @property
+    def is_on(self) -> bool:
+        mode = str(self._data().get("working_mode") or "").upper()
+
+        # xTool:
+        # NORMAL = stop when moved enabled
+        # HANDLE = handheld mode, stop when moved disabled
+        return mode == "NORMAL"
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {
+            "mode_raw": self._data().get("working_mode"),
+        }
+        
 # --- S1 ---
 class S1PowerBinarySensor(_BaseBinary):
     _attr_device_class = BinarySensorDeviceClass.POWER
