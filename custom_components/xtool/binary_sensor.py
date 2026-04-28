@@ -64,7 +64,6 @@ async def async_setup_entry(
                     "gap_check_enabled",
                     "Stop when lid opened",
                     None,
-                    invert=True,
                 ),
                 XToolF1V2WorkingModeBinarySensor(
                     coordinator,
