@@ -13,6 +13,7 @@ SUPPORTED_DEVICE_TYPES: dict[str, str] = {
     "P2": "p2",
     "P3": "p3",
     "F1": "f1",
+    "F1 V2 / Firmware 40.51+": "f1_v2",
     "F2": "f2",
     "F2 Ultra": "f2u",
     "F2 Ultra UV": "f2uuv",
