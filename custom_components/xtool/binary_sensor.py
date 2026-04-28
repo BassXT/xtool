@@ -29,6 +29,64 @@ async def async_setup_entry(
     d = coordinator.data or {}
     entities: list[BinarySensorEntity] = []
 
+    if device_type == "f1_v2":
+        entities.extend(
+            [
+                XToolPowerBinarySensor(coordinator, name, entry_id, device_type),
+                XToolAlarmBinarySensor(coordinator, name, entry_id, device_type),
+                XToolRunningBinarySensor(coordinator, name, entry_id, device_type),
+                XToolLidOpenBinarySensor(coordinator, name, entry_id, device_type),
+                XToolMachineLockBinarySensor(coordinator, name, entry_id, device_type),
+                XToolF1V2ConfigBinarySensor(
+                    coordinator,
+                    name,
+                    entry_id,
+                    device_type,
+                    "flame_alarm_enabled",
+                    "Flame Alarm",
+                    BinarySensorDeviceClass.SAFETY,
+                ),
+                XToolF1V2ConfigBinarySensor(
+                    coordinator,
+                    name,
+                    entry_id,
+                    device_type,
+                    "beep_enabled",
+                    "Buzzer",
+                    None,
+                ),
+                XToolF1V2ConfigBinarySensor(
+                    coordinator,
+                    name,
+                    entry_id,
+                    device_type,
+                    "gap_check_enabled",
+                    "Gap Check",
+                    BinarySensorDeviceClass.SAFETY,
+                ),
+                XToolF1V2ConfigBinarySensor(
+                    coordinator,
+                    name,
+                    entry_id,
+                    device_type,
+                    "gap_check_with_key_enabled",
+                    "Gap Check With Key",
+                    BinarySensorDeviceClass.SAFETY,
+                ),
+                XToolF1V2ConfigBinarySensor(
+                    coordinator,
+                    name,
+                    entry_id,
+                    device_type,
+                    "machine_lock_check_enabled",
+                    "Machine Lock Check",
+                    BinarySensorDeviceClass.LOCK,
+                ),
+            ]
+        )
+        async_add_entities(entities, True)
+        return
+        
     if device_type == "s1":
         entities.extend(
             [
@@ -160,7 +218,32 @@ class _BaseBinary(CoordinatorEntity, BinarySensorEntity):
     def _unavailable(self) -> bool:
         return bool(self._data().get("_unavailable"))
 
+class XToolF1V2ConfigBinarySensor(_BaseBinary):
+    def __init__(
+        self,
+        coordinator,
+        name: str,
+        entry_id: str,
+        device_type: str,
+        key: str,
+        label: str,
+        device_class: BinarySensorDeviceClass | None,
+    ) -> None:
+        super().__init__(coordinator, name, entry_id, device_type)
+        self._key = key
+        self._attr_name = label
+        self._attr_unique_id = f"{entry_id}_f1_v2_{key}"
+        self._attr_device_class = device_class
 
+    @property
+    def available(self) -> bool:
+        if self._unavailable():
+            return False
+        return self._data().get(self._key) is not None
+
+    @property
+    def is_on(self) -> bool:
+        return bool(self._data().get(self._key))
 # --- S1 ---
 class S1PowerBinarySensor(_BaseBinary):
     _attr_device_class = BinarySensorDeviceClass.POWER
