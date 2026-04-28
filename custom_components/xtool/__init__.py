@@ -11,6 +11,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
+from .coordinator_f1_v2 import XToolF1V2Coordinator
 from .coordinator_d1 import XToolD1Coordinator
 from .coordinator_s1 import XToolS1Coordinator
 from .const import (
@@ -186,9 +187,9 @@ class XToolCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if state in {"on", "off"}:
                 # M1 Ultra uses inverted logic on /peripheral/gap
                 if self.device_type in ("m1u", "m1 ultra"):
-                    lid_open = (state == "off")  # off = open (M1U)
+                    lid_open = state == "off"  # off = open (M1U)
                 else:
-                    lid_open = (state == "on")  # on = open (P2/F1/M1)
+                    lid_open = state == "on"  # on = open (P2/F1/M1)
         return {"lid_open": lid_open}
 
     def _normalize_smoking_fan(self, raw: Any) -> dict[str, Any]:
@@ -219,7 +220,7 @@ class XToolCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if isinstance(exist, bool):
                 out["ext_purifier_exist"] = exist
             else:
-                out["ext_purifier_exist"] = (str(data.get("version", "{}")) != "{}")
+                out["ext_purifier_exist"] = str(data.get("version", "{}")) != "{}"
             out["ext_purifier_power"] = data.get("power")
             out["ext_purifier_current"] = data.get("current")
         return out
@@ -229,7 +230,7 @@ class XToolCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if isinstance(raw, dict) and isinstance(raw.get("data"), dict):
             st = str(raw["data"].get("state", "")).lower()
             if st in {"on", "off"}:
-                locked = (st == "on")
+                locked = st == "on"
         return {"machine_lock": locked}
 
     def _normalize_drawer(self, raw: Any) -> dict[str, Any]:
@@ -239,7 +240,7 @@ class XToolCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             st = str(raw["data"].get("state", "")).lower()
             if st in {"on", "off"}:
                 # on = open, off = closed (your confirmed semantics)
-                drawer_open = (st == "on")
+                drawer_open = st == "on"
         return {"drawer_open": drawer_open}
 
     def _normalize_airassist(self, raw: Any) -> dict[str, Any]:
@@ -313,7 +314,11 @@ class XToolCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             except requests.exceptions.ConnectionError as err2:
                 self._log_reachability(False)
-                _LOGGER.debug("XTool %s connection error (fallback): %s", self.ip_address, err2)
+                _LOGGER.debug(
+                    "XTool %s connection error (fallback): %s",
+                    self.ip_address,
+                    err2,
+                )
                 normalized["_unavailable"] = True
                 return normalized
             except Exception as err2:  # noqa: BLE001
@@ -345,7 +350,7 @@ class XToolCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # - Others: keep old behavior (poll even in sleep)
         should_poll_peripherals = (not is_sleeping) if is_m1u else True
         should_poll_slow_gets = (not is_sleeping) if is_m1u else True
-        should_poll_slow_posts = (not is_sleeping)  # POST never while sleeping
+        should_poll_slow_posts = not is_sleeping  # POST never while sleeping
 
         # 2) Peripherals
         if should_poll_peripherals:
@@ -357,9 +362,12 @@ class XToolCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             # F1: no exhaust fan endpoint/entity
             if self.device_type != "f1":
-                peripherals.insert(1, ("/peripheral/smoking_fan", self._normalize_smoking_fan))
+                peripherals.insert(
+                    1,
+                    ("/peripheral/smoking_fan", self._normalize_smoking_fan),
+                )
 
-            # AirAssist: not wanted on F1 (you said remove it)
+            # AirAssist: not wanted on F1
             if self.device_type != "f1":
                 peripherals.append(("/peripheral/airassist", self._normalize_airassist))
 
@@ -382,7 +390,7 @@ class XToolCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     if isinstance(raw_hatch, dict) and isinstance(raw_hatch.get("data"), dict):
                         door = str(raw_hatch["data"].get("door", "")).lower()
                         if door in ("on", "off"):
-                            normalized["hatch_open"] = (door == "off")
+                            normalized["hatch_open"] = door == "off"
                 except Exception:
                     pass
 
@@ -483,8 +491,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     ip = entry.data[CONF_IP_ADDRESS]
     dev_type = entry.data[CONF_DEVICE_TYPE].lower()
 
-    if dev_type == "d1":
-        coordinator: DataUpdateCoordinator = XToolD1Coordinator(hass, ip)
+    if dev_type == "f1_v2":
+        coordinator: DataUpdateCoordinator = XToolF1V2Coordinator(hass, ip)
+        await coordinator.async_start()
+    elif dev_type == "d1":
+        coordinator = XToolD1Coordinator(hass, ip)
         await coordinator.async_config_entry_first_refresh()
     elif dev_type == "s1":
         has_ap2 = entry.data.get(CONF_HAS_AP2, False)
@@ -508,6 +519,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+
     if unload_ok:
-        hass.data[DOMAIN].pop(entry.entry_id, None)
+        store = hass.data[DOMAIN].pop(entry.entry_id, None)
+        coordinator = store.get("coordinator") if store else None
+
+        if hasattr(coordinator, "async_stop"):
+            await coordinator.async_stop()
+
     return unload_ok
