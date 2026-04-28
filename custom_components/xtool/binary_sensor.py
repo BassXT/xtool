@@ -19,18 +19,16 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up the binary sensor entities."""
     store = hass.data[DOMAIN][entry.entry_id]
     coordinator = store["coordinator"]
     name: str = store["name"]
     entry_id: str = store["entry_id"]
     device_type: str = store.get("device_type", "").lower()
 
-    d = coordinator.data or {}
     entities: list[BinarySensorEntity] = []
 
     # -------------------------
-    # F1 V2 (NEU / CLEAN)
+    # F1 V2
     # -------------------------
     if device_type == "f1_v2":
         entities.extend(
@@ -41,7 +39,7 @@ async def async_setup_entry(
                 XToolLidOpenBinarySensor(coordinator, name, entry_id, device_type),
                 XToolMachineLockBinarySensor(coordinator, name, entry_id, device_type),
 
-                # Flame Alarm (invertiert)
+                # Flame Alarm → ON/OFF (invertiert)
                 XToolF1V2ConfigBinarySensor(
                     coordinator,
                     name,
@@ -49,7 +47,7 @@ async def async_setup_entry(
                     device_type,
                     "flame_alarm_enabled",
                     "Flame Alarm",
-                    BinarySensorDeviceClass.SAFETY,
+                    None,
                     invert=True,
                 ),
 
@@ -64,7 +62,7 @@ async def async_setup_entry(
                     None,
                 ),
 
-                # Gap Check → Lid Stop (invertiert)
+                # Lid Stop → ON/OFF (invertiert)
                 XToolF1V2ConfigBinarySensor(
                     coordinator,
                     name,
@@ -72,11 +70,11 @@ async def async_setup_entry(
                     device_type,
                     "gap_check_enabled",
                     "Stop when lid opened",
-                    BinarySensorDeviceClass.SAFETY,
+                    None,
                     invert=True,
                 ),
 
-                # Working Mode → Stop when moved
+                # Move Protection
                 XToolF1V2WorkingModeBinarySensor(
                     coordinator,
                     name,
@@ -87,63 +85,6 @@ async def async_setup_entry(
         )
         async_add_entities(entities, True)
         return
-
-    # -------------------------
-    # S1
-    # -------------------------
-    if device_type == "s1":
-        entities.extend(
-            [
-                S1PowerBinarySensor(coordinator, name, entry_id, device_type),
-                S1RunningBinarySensor(coordinator, name, entry_id, device_type),
-                S1AlarmBinarySensor(coordinator, name, entry_id, device_type),
-                S1PurifierRunningBinarySensor(coordinator, name, entry_id, device_type),
-            ]
-        )
-        async_add_entities(entities, True)
-        return
-
-    # -------------------------
-    # D1
-    # -------------------------
-    if device_type == "d1":
-        entities.extend(
-            [
-                D1PowerBinarySensor(coordinator, name, entry_id, device_type),
-                D1RunningBinarySensor(coordinator, name, entry_id, device_type),
-            ]
-        )
-
-        if d.get("tiltStopFlag") is not None:
-            entities.append(
-                D1FlagBinarySensor(
-                    coordinator,
-                    name,
-                    entry_id,
-                    device_type,
-                    "tiltStopFlag",
-                    "Tilt Stop",
-                    BinarySensorDeviceClass.PROBLEM,
-                )
-            )
-
-        async_add_entities(entities, True)
-        return
-
-    # -------------------------
-    # Standard
-    # -------------------------
-    entities.extend(
-        [
-            XToolPowerBinarySensor(coordinator, name, entry_id, device_type),
-            XToolAlarmBinarySensor(coordinator, name, entry_id, device_type),
-            XToolRunningBinarySensor(coordinator, name, entry_id, device_type),
-            XToolLidOpenBinarySensor(coordinator, name, entry_id, device_type),
-        ]
-    )
-
-    if device_type != "p2":
-        entities.append(XToolMachineLockBinarySensor(coordinator, name, entry_id, device_type))
 
     async_add_entities(entities, True)
 
@@ -178,7 +119,7 @@ class _BaseBinary(CoordinatorEntity, BinarySensorEntity):
 
 
 # =========================================================
-# F1 V2 SPECIAL
+# F1 V2
 # =========================================================
 
 class XToolProblemBinarySensor(_BaseBinary):
@@ -234,10 +175,6 @@ class XToolF1V2WorkingModeBinarySensor(_BaseBinary):
         return str(self._data().get("working_mode") or "").upper() == "NORMAL"
 
 
-# =========================================================
-# COMMON
-# =========================================================
-
 class XToolPowerBinarySensor(_BaseBinary):
     _attr_device_class = BinarySensorDeviceClass.POWER
 
@@ -249,19 +186,6 @@ class XToolPowerBinarySensor(_BaseBinary):
     @property
     def is_on(self):
         return (not self._unavailable()) and bool(self.coordinator.last_update_success)
-
-
-class XToolAlarmBinarySensor(_BaseBinary):
-    _attr_device_class = BinarySensorDeviceClass.PROBLEM
-
-    def __init__(self, coordinator, name, entry_id, device_type):
-        super().__init__(coordinator, name, entry_id, device_type)
-        self._attr_name = "Alarm"
-        self._attr_unique_id = f"{entry_id}_alarm"
-
-    @property
-    def is_on(self):
-        return bool(self._data().get("alarm_present"))
 
 
 class XToolRunningBinarySensor(_BaseBinary):
