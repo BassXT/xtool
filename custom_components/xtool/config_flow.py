@@ -43,7 +43,10 @@ class XToolConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 data={
                     CONF_NAME: user_input[CONF_NAME],
                     CONF_IP_ADDRESS: user_input[CONF_IP_ADDRESS],
-                    CONF_DEVICE_TYPE: user_input[CONF_DEVICE_TYPE],
+                    CONF_DEVICE_TYPE: SUPPORTED_DEVICE_TYPES.get(
+    user_input[CONF_DEVICE_TYPE],
+    user_input[CONF_DEVICE_TYPE],
+),
                 },
             )
 
