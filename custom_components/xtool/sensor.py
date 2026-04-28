@@ -27,6 +27,19 @@ async def async_setup_entry(
 
     entities: list[SensorEntity] = []
 
+    if device_type == "f1_v2":
+        entities.extend(
+            [
+                XToolF1V2StatusSensor(coordinator, name, entry_id, device_type),
+                XToolF1V2WorkingModeSensor(coordinator, name, entry_id, device_type),
+                XToolF1V2LastResultSensor(coordinator, name, entry_id, device_type),
+                XToolF1V2LastJobTimeSensor(coordinator, name, entry_id, device_type),
+                XToolF1V2PurifierTimeoutSensor(coordinator, name, entry_id, device_type),
+            ]
+        )
+        async_add_entities(entities, True)
+        return
+    
     if device_type == "d1":
         entities.extend(
             [
@@ -140,7 +153,83 @@ class _BaseSensor(CoordinatorEntity, SensorEntity):
     def _unavailable(self) -> bool:
         return bool(self._data().get("_unavailable"))
 
+class XToolF1V2StatusSensor(_BaseSensor):
+    _attr_icon = "mdi:laser-pointer"
 
+    def __init__(self, coordinator, name, entry_id, device_type):
+        super().__init__(coordinator, name, entry_id, device_type)
+        self._attr_name = "Status"
+        self._attr_unique_id = f"{entry_id}_f1_v2_status"
+
+    @property
+    def native_value(self):
+        if self._unavailable():
+            return "Unavailable"
+        return self._data().get("status") or "unknown"
+
+
+class XToolF1V2WorkingModeSensor(_BaseSensor):
+    _attr_icon = "mdi:cog-outline"
+
+    def __init__(self, coordinator, name, entry_id, device_type):
+        super().__init__(coordinator, name, entry_id, device_type)
+        self._attr_name = "Working Mode"
+        self._attr_unique_id = f"{entry_id}_f1_v2_working_mode"
+
+    @property
+    def native_value(self):
+        if self._unavailable():
+            return None
+        return self._data().get("working_mode")
+
+
+class XToolF1V2LastResultSensor(_BaseSensor):
+    _attr_icon = "mdi:check-circle-outline"
+
+    def __init__(self, coordinator, name, entry_id, device_type):
+        super().__init__(coordinator, name, entry_id, device_type)
+        self._attr_name = "Last Result"
+        self._attr_unique_id = f"{entry_id}_f1_v2_last_result"
+
+    @property
+    def native_value(self):
+        if self._unavailable():
+            return None
+        return self._data().get("last_result")
+
+
+class XToolF1V2LastJobTimeSensor(_BaseSensor):
+    _attr_icon = "mdi:timer-outline"
+    _attr_native_unit_of_measurement = UnitOfTime.SECONDS
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(self, coordinator, name, entry_id, device_type):
+        super().__init__(coordinator, name, entry_id, device_type)
+        self._attr_name = "Last Job Time"
+        self._attr_unique_id = f"{entry_id}_f1_v2_last_job_time"
+
+    @property
+    def native_value(self):
+        if self._unavailable():
+            return None
+        return self._data().get("last_job_time")
+
+
+class XToolF1V2PurifierTimeoutSensor(_BaseSensor):
+    _attr_icon = "mdi:timer-cog-outline"
+    _attr_native_unit_of_measurement = UnitOfTime.MINUTES
+
+    def __init__(self, coordinator, name, entry_id, device_type):
+        super().__init__(coordinator, name, entry_id, device_type)
+        self._attr_name = "Purifier Timeout"
+        self._attr_unique_id = f"{entry_id}_f1_v2_purifier_timeout"
+
+    @property
+    def native_value(self):
+        if self._unavailable():
+            return None
+        return self._data().get("purifier_timeout")
+        
 # --- D1 ---
 class D1StatusSensor(_BaseSensor):
     _attr_icon = "mdi:laser-pointer"
