@@ -52,6 +52,8 @@ class XToolF1V2Coordinator(DataUpdateCoordinator[dict[str, Any]]):
             "last_job_time": None,
             "task_id": None,
             "config": {},
+            "last_unhandled_mode": None,
+            "last_unhandled_event": None,
         }
 
     async def async_start(self) -> None:
@@ -83,12 +85,7 @@ class XToolF1V2Coordinator(DataUpdateCoordinator[dict[str, Any]]):
             await asyncio.sleep(10)
 
     def _handle_disconnect(self) -> None:
-        """Handle websocket disconnect without treating sleep as unavailable.
-
-        The F1 V2 can close/refuse the websocket while sleeping. That is not the
-        same as the machine being unavailable. Keep the last known machine status
-        and only mark unavailable if we never received a valid state before.
-        """
+        """Handle websocket disconnect without treating sleep as unavailable."""
         self._state["connection_state"] = "disconnected"
         self._state["running"] = False
 
@@ -124,8 +121,11 @@ class XToolF1V2Coordinator(DataUpdateCoordinator[dict[str, Any]]):
                 heartbeat=None,
                 max_msg_size=0,
             ) as ws:
-                self._state["_unavailable"] = False
                 self._state["connection_state"] = "connected"
+
+                if self._state.get("status") not in (None, "unknown"):
+                    self._state["_unavailable"] = False
+
                 self.async_set_updated_data(dict(self._state))
 
                 await ws.send_str(XTOOL_WS_HANDSHAKE)
@@ -172,8 +172,14 @@ class XToolF1V2Coordinator(DataUpdateCoordinator[dict[str, Any]]):
         if idx == -1:
             return None
 
+        payload = raw[idx:]
+
+        # Some F1 V2 frames can contain "{{" before the real JSON payload.
+        if payload.startswith(b"{{"):
+            payload = payload[1:]
+
         try:
-            return json.loads(raw[idx:].decode("utf-8"))
+            return json.loads(payload.decode("utf-8"))
         except Exception:
             _LOGGER.debug("Unable to parse F1 V2 binary websocket frame", exc_info=True)
             return None
@@ -184,9 +190,14 @@ class XToolF1V2Coordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._state["running"] = status in {
             "framing",
             "prepared",
-            "ready",
             "working",
         }
+
+    def _remember_unhandled_event(self, event: dict[str, Any], mode: str | None = None) -> None:
+        self._state["last_unhandled_event"] = event
+        if mode:
+            self._state["last_unhandled_mode"] = mode
+        _LOGGER.debug("Unhandled F1 V2 event/mode kept without status change: %s", event)
 
     def _handle_event(self, event: dict[str, Any]) -> None:
         url = event.get("url")
@@ -199,30 +210,57 @@ class XToolF1V2Coordinator(DataUpdateCoordinator[dict[str, Any]]):
         changed = False
 
         if url == "/work/mode" and module == "STATUS_CONTROLLER" and typ == "MODE_CHANGE":
-            if isinstance(info, dict):
-                mode = str(info.get("mode", "")).upper()
+            if not isinstance(info, dict):
+                self._remember_unhandled_event(event)
+                return
 
-                if mode == "P_SLEEP":
-                    self._set_status("sleep", mode)
-                elif mode in {
-                    "P_WORK",
-                    "P_ONLINE_READY_WORK",
-                    "P_OFFLINE_READY_WORK",
-                    "P_READY",
-                }:
-                    self._set_status("ready", mode)
-                elif mode == "P_WORKING":
-                    self._set_status("working", mode)
-                elif mode in {"P_IDLE", "IDLE"}:
-                    self._set_status("idle", mode)
-                elif mode in {"P_WORK_DONE", "P_FINISH"}:
-                    self._set_status("finished", mode)
-                elif mode == "P_ERROR":
-                    self._set_status("error", mode)
+            mode_raw = info.get("mode")
+
+            # Important:
+            # /work/mode without "mode" is only a transition/task update.
+            # It must not set the visible status to Unknown.
+            if not mode_raw:
+                _LOGGER.debug("Ignoring F1 V2 /work/mode without mode: %s", info)
+                return
+
+            mode = str(mode_raw).upper()
+
+            if mode == "P_SLEEP":
+                self._set_status("sleep", mode)
+
+            elif mode in {
+                "P_WORK",
+                "P_ONLINE_READY_WORK",
+                "P_OFFLINE_READY_WORK",
+                "P_READY",
+            }:
+                self._set_status("ready", mode)
+
+            elif mode == "P_WORKING":
+                # During framing the device also emits P_WORKING.
+                # Keep "framing" until WORK_FINISHED framing arrives.
+                if self._state.get("status") == "framing":
+                    self._state["work_state_raw"] = mode
+                    self._state["running"] = True
                 else:
-                    self._set_status("unknown", mode)
+                    self._set_status("working", mode)
 
-                changed = True
+            elif mode in {"P_WORK_DONE", "P_FINISH"}:
+                self._set_status("finished", mode)
+
+            elif mode == "P_ERROR":
+                self._set_status("error", mode)
+
+            else:
+                # Never destroy a valid state with "unknown".
+                self._remember_unhandled_event(event, mode)
+                return
+
+            task_id = info.get("taskId")
+            if task_id is not None:
+                self._state["task_id"] = task_id
+
+            changed = True
 
         elif url == "/device/status" and module == "STATUS_CONTROLLER":
             info_str = str(info).lower()
@@ -236,6 +274,12 @@ class XToolF1V2Coordinator(DataUpdateCoordinator[dict[str, Any]]):
                     self._set_status("prepared", "WORK_PREPARED")
                 changed = True
 
+            elif typ == "HEAT_STOPED":
+                # This means preheat is done and the device is entering laser work.
+                if info_str == "working":
+                    self._set_status("working", "HEAT_STOPED")
+                    changed = True
+
             elif typ == "WORK_STARTED":
                 if info_str == "framing":
                     self._set_status("framing", "WORK_STARTED")
@@ -247,18 +291,23 @@ class XToolF1V2Coordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             elif typ == "WORK_FINISHED":
                 if info_str == "framing":
-                    self._set_status("idle", "WORK_FINISHED")
+                    self._set_status("ready", "WORK_FINISHED")
                 elif info_str == "working":
                     self._set_status("finished", "WORK_FINISHED")
                 else:
                     self._set_status("finished", "WORK_FINISHED")
                 changed = True
 
+            else:
+                self._remember_unhandled_event(event)
+                return
+
         elif url == "/work/result" and module == "WORK_RESULT" and typ == "WORK_FINISHED":
             if isinstance(info, dict):
                 self._state["last_result"] = info.get("result")
                 self._state["last_job_time"] = info.get("timeUse")
                 self._state["task_id"] = info.get("taskId")
+                self._set_status("finished", "WORK_FINISHED")
                 changed = True
 
         elif url == "/device/config" and module == "DEVICE_CONFIG" and typ == "INFO":
@@ -268,9 +317,7 @@ class XToolF1V2Coordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self._state["beep_enabled"] = info.get("beepEnable")
                 self._state["gap_check_enabled"] = info.get("gapCheck")
                 self._state["gap_check_with_key_enabled"] = info.get("gapCheckWithKey")
-                self._state["machine_lock_check_enabled"] = info.get(
-                    "machineLockCheck"
-                )
+                self._state["machine_lock_check_enabled"] = info.get("machineLockCheck")
                 self._state["purifier_timeout"] = info.get("purifierTimeout")
                 self._state["working_mode"] = info.get("workingMode")
                 changed = True
@@ -297,7 +344,17 @@ class XToolF1V2Coordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "info": info,
                 "timestamp": event.get("timestamp") or int(time.time() * 1000),
             }
+
+            # The device wakes from sleep via button events but does not always
+            # send a new P_WORK/P_READY event immediately.
+            if self._is_sleep_state():
+                self._set_status("ready", "BUTTON_WAKE")
+
             changed = True
+
+        else:
+            self._remember_unhandled_event(event)
+            return
 
         if changed:
             self._state["_unavailable"] = False
