@@ -85,15 +85,19 @@ class XToolF1V2Coordinator(DataUpdateCoordinator[dict[str, Any]]):
             await asyncio.sleep(10)
 
     def _handle_disconnect(self) -> None:
-        """Handle websocket disconnect without treating sleep as unavailable."""
+        """Handle websocket disconnect.
+
+        Sleeping is a valid device state.
+        Any other disconnect means the device is unavailable/offline.
+        """
         self._state["connection_state"] = "disconnected"
         self._state["running"] = False
 
         if self._is_sleep_state():
             self._set_status("sleep", self._state.get("work_state_raw") or "P_SLEEP")
-
-        has_valid_state = self._state.get("status") not in (None, "unknown")
-        self._state["_unavailable"] = not has_valid_state
+            self._state["_unavailable"] = False
+        else:
+            self._state["_unavailable"] = True
 
         self.async_set_updated_data(dict(self._state))
 
@@ -193,7 +197,11 @@ class XToolF1V2Coordinator(DataUpdateCoordinator[dict[str, Any]]):
             "working",
         }
 
-    def _remember_unhandled_event(self, event: dict[str, Any], mode: str | None = None) -> None:
+    def _remember_unhandled_event(
+        self,
+        event: dict[str, Any],
+        mode: str | None = None,
+    ) -> None:
         self._state["last_unhandled_event"] = event
         if mode:
             self._state["last_unhandled_mode"] = mode
@@ -216,7 +224,6 @@ class XToolF1V2Coordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             mode_raw = info.get("mode")
 
-            # Important:
             # /work/mode without "mode" is only a transition/task update.
             # It must not set the visible status to Unknown.
             if not mode_raw:
