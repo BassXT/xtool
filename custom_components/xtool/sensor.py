@@ -169,6 +169,7 @@ class XToolF1V2StatusSensor(_BaseSensor):
         mapping = {
             "idle": "Idle",
             "framing": "Framing",
+            "ready": "Ready",
             "prepared": "Prepared",
             "ready": "Ready",
             "working": "Working",
