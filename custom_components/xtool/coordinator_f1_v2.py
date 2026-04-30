@@ -112,7 +112,7 @@ class XToolF1V2Coordinator(DataUpdateCoordinator[dict[str, Any]]):
             f"?id={uuid.uuid4()}&function=instruction"
         )
 
-        ssl_ctx = ssl.create_default_context()
+        ssl_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
         ssl_ctx.check_hostname = False
         ssl_ctx.verify_mode = ssl.CERT_NONE
 
