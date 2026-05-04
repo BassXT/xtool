@@ -1,3 +1,13 @@
+# ⚠️ This repository is archived
+
+This project is no longer maintained.
+
+Please use the actively maintained integration instead:
+https://github.com/thecodingdad/ha-xtool
+
+
+
+
 # XTool Home Assistant Integration
 
 This is a **custom integration for Home Assistant** that connects and monitors **xTool laser engravers** such as **P2**, **F1**, **M1**, and **Apparel**.
